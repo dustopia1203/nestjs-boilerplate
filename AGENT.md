@@ -137,6 +137,159 @@ Strong success criteria let you loop independently. Weak criteria
 
 ---
 
+## Project Architecture
+
+Layer-first DDD + Clean Architecture with convention-based CQRS. The `src/`
+tree is sliced by Clean Architecture layer; each layer owns a `shared/`
+sub-folder for cross-cutting code that does not yet belong to a real
+bounded context.
+
+| Layer             | Responsibility                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `domain/`         | Entities, value objects, domain events, domain services. **Pure TypeScript** — no framework, no outward dependencies. |
+| `application/`    | Use-cases (commands + queries), application services, DTOs, mappers, config. Orchestrates the domain.                 |
+| `infrastructure/` | Adapters (DB, HTTP clients, message buses, env, fs).                                                                  |
+| `presentation/`   | Transport layer sliced by protocol (`rest/`, `graphql/`, `ws/`, …). Controllers, request/response mapping.            |
+
+### Dependency rule
+
+| Layer                                         | May import from                   | Must NOT import from                                                  |
+| --------------------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
+| `domain/**`                                   | other `domain/**`, node built-ins | `application/**`, `infrastructure/**`, `presentation/**`, `@nestjs/*` |
+| `application/**`                              | `domain/**`                       | `infrastructure/**`, `presentation/**`                                |
+| `infrastructure/**`                           | `application/**`, `domain/**`     | `presentation/**`                                                     |
+| `presentation/**`                             | `application/**`                  | `domain/**`, `infrastructure/**`                                      |
+| `app.module.ts`, `main.ts` (composition root) | anything                          | — (exempt)                                                            |
+
+The "no NestJS in `domain/`" rule is intentional and strict. Domain code stays
+pure TypeScript so it is testable without `Test.createTestingModule`, mocks,
+or any framework setup. If a domain service needs `@Injectable()`, the
+service belongs in `application/`, not `domain/`.
+
+The rule is enforced by `import-x/no-restricted-paths` in `eslint.config.mjs`
+and runs on every commit via `lint-staged` and on `bun run check`.
+
+### Path aliases
+
+```text
+@domain/*         → src/domain/*
+@application/*    → src/application/*
+@infrastructure/* → src/infrastructure/*
+@presentation/*   → src/presentation/*
+```
+
+**Convention.** Use the alias for **cross-layer** imports. Use a relative
+path (`./foo`) for **same-folder siblings**.
+
+### Application layer sub-folders
+
+Each bounded context under `application/<context>/` may contain:
+
+| Folder     | Purpose                                                       |
+| ---------- | ------------------------------------------------------------- |
+| `service/` | Application services — orchestrate domain + infrastructure.   |
+| `dto/`     | Input / output data shapes crossing the application boundary. |
+| `mapper/`  | Transform domain objects to/from DTOs.                        |
+| `config/`  | Application-level feature flags, settings, constants.         |
+
+### CQRS convention
+
+Use-cases are plain classes, **one file per use-case**, placed directly inside
+`application/<context>/`:
+
+- `<action>.command.ts` — state-changing operation. Handler in the same file
+  or a sibling `<action>.command-handler.ts`.
+- `<action>.query.ts` — read-only operation.
+
+Rules:
+
+- Handlers are plain classes invoked directly from controllers via Nest DI.
+- No bus library. No `@nestjs/cqrs`. No custom CommandBus / QueryBus interface.
+
+If the project later needs sagas, event sourcing, or many handlers benefiting
+from a centralised dispatcher, `@nestjs/cqrs` can be adopted incrementally
+without moving files.
+
+### Presentation layer sub-folders
+
+`presentation/` is sliced by **transport protocol**, not by feature:
+
+| Folder     | Purpose                                  |
+| ---------- | ---------------------------------------- |
+| `rest/`    | NestJS REST controllers, guards, pipes.  |
+| `graphql/` | GraphQL resolvers, input types (future). |
+| `ws/`      | WebSocket gateways (future).             |
+
+Each protocol folder mirrors the bounded-context structure of `application/`:
+`presentation/rest/<context>/`.
+
+### Where does new code go?
+
+| What                                     | Where                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| New REST endpoint                        | `presentation/rest/<context>/`                                          |
+| New use-case                             | `application/<context>/` — `<action>.command.ts` or `<action>.query.ts` |
+| New application service                  | `application/<context>/service/`                                        |
+| New DTO                                  | `application/<context>/dto/`                                            |
+| New mapper                               | `application/<context>/mapper/`                                         |
+| New entity / value object / domain event | `domain/<context>/`                                                     |
+| New DB or HTTP-client adapter            | `infrastructure/<context>/`                                             |
+
+### Composition root exception
+
+`src/main.ts` and `src/app.module.ts` may import from any layer. Do not
+bypass `AppModule` to wire feature modules — every feature module is
+imported into `AppModule` (directly or transitively).
+
+## Test-Driven Development
+
+Mandatory red → green → refactor for every change that introduces or alters
+behaviour:
+
+1. **Write the test first.** Run it. Confirm it fails _for the right reason_
+   — i.e., the missing behaviour, not a typo or compile error. If it does
+   not compile, fix the compile error first, then observe the meaningful
+   failure.
+2. **Write the minimum production code** to make the test pass.
+3. **Refactor without changing behaviour.** All tests stay green.
+
+For bug fixes: start by writing a test that reproduces the bug. The test
+must fail. Then fix.
+
+### Exemptions (no new test required)
+
+- Pure formatting, comment, or JSDoc-only changes.
+- Dependency version bumps with no API surface change.
+- Type-only changes that the type-checker already proves.
+- Composition-root wiring in `main.ts` and `app.module.ts` (covered by the
+  e2e suite, not unit tests).
+
+### Test placement
+
+- **Unit tests** live next to the code they test, named `<file>.spec.ts`.
+- **E2E tests** live in `test/`.
+- Tests for `domain/**` and `application/**` must be **pure**: no
+  `Test.createTestingModule`, no DB, no HTTP, no Nest DI container. This is
+  the direct payoff of the layer-dependency rule.
+
+### Coverage
+
+Global threshold of **90%** for `lines`, `statements`, `functions`, and
+`branches`, enforced by Jest's `coverageThreshold`. Runs only when coverage
+is collected — i.e., via `bun run test:cov`. Default `bun test` stays
+uninstrumented so the local TDD loop is fast. CI is expected to invoke
+`bun run test:cov`. The `bun run check` composite includes it.
+
+Path-ignored from coverage:
+
+- `node_modules/`
+- `src/main.ts` (composition root)
+- `src/app.module.ts` (composition root)
+- `**/*.module.ts` (Nest modules are wiring, not behaviour)
+
+Cross-link: this section is the operational form of "Goal-Driven Execution"
+above — the failing test _is_ the verifiable goal.
+
 ## Signs these guidelines are working
 
 - Fewer unnecessary changes in diffs.

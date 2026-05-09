@@ -25,8 +25,46 @@ scanner, `secretlint`) is installed via `bun add -d` and lives inside
 ```bash
 bun install            # installs deps and (after git init) activates Husky hooks
 bun run start:dev      # boots Nest on http://localhost:3000
+bun test               # fast TDD loop (no coverage)
+bun run test:cov       # full suite with 90% coverage floor
+bun run check          # everything CI runs (typecheck + lint + format + audit + secrets + coverage)
 curl http://localhost:3000   # -> "Hello World!"
 ```
+
+## Project structure
+
+```text
+src/
+├── domain/              # entities, value objects, domain events. Pure TS.
+│   └── shared/
+├── application/         # use-cases, services, DTOs, mappers, config.
+│   └── shared/
+│       ├── config/      # application-level configuration
+│       ├── dto/         # data transfer objects
+│       ├── mapper/      # entity ↔ DTO mapping
+│       └── service/
+│           └── app.service.ts
+├── infrastructure/      # adapters (DB, HTTP clients, message buses, env, fs).
+│   └── shared/
+├── presentation/        # transport layer — sliced by protocol.
+│   └── rest/            # REST/HTTP slice
+│       └── shared/
+│           ├── shared.module.ts
+│           └── app.controller.ts
+├── app.module.ts        # composition root
+└── main.ts              # bootstrap
+```
+
+See [`AGENT.md`](./AGENT.md) for the full dependency rule and per-layer
+responsibilities.
+
+## Architecture
+
+Layer-first DDD + Clean Architecture with convention-based CQRS. The
+dependency rule (`domain` → nothing outward, `presentation` → only
+`application`, etc.) is enforced by `import-x/no-restricted-paths` and runs
+on every commit. See [`AGENT.md`](./AGENT.md) for the full matrix and the
+"where does new code go?" decision tree.
 
 ## First-time git setup
 
@@ -57,7 +95,8 @@ only** for speed.
 
 The single command `bun run check` runs all of these against the entire
 working tree (typecheck + lint + format-check + audit + secrets-scan). It is
-designed to be the same command CI invokes once CI is added.
+designed to be the same command CI invokes once CI is added. It also runs
+`bun run test:cov`, enforcing the **90% coverage floor** documented in `AGENT.md`.
 
 ## Adding a function
 
@@ -87,6 +126,7 @@ Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
 | `bun run start:prod`   | Run the compiled app                  |
 | `bun run test`         | Unit tests (Jest)                     |
 | `bun run test:e2e`     | End-to-end tests                      |
+| `bun run test:cov`     | Unit tests + 90% coverage floor       |
 | `bun run lint`         | Lint with `--max-warnings=0`          |
 | `bun run lint:fix`     | Lint + autofix                        |
 | `bun run format`       | Format with Prettier                  |

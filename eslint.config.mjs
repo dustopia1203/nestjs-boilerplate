@@ -108,6 +108,42 @@ export default tseslint.config(
       ],
       'import-x/no-cycle': 'error',
       'import-x/no-default-export': 'off',
+      'import-x/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            {
+              target: './src/domain',
+              from: ['./src/application', './src/infrastructure', './src/presentation'],
+              message:
+                'domain/** must not depend on outer layers (application, infrastructure, presentation).',
+            },
+            {
+              target: './src/domain',
+              from: './node_modules/@nestjs',
+              message:
+                'domain/** must remain pure TypeScript — no NestJS framework imports allowed.',
+            },
+            {
+              target: './src/application',
+              from: ['./src/infrastructure', './src/presentation'],
+              message:
+                'application/** must not depend on infrastructure/** or presentation/**.',
+            },
+            {
+              target: './src/infrastructure',
+              from: './src/presentation',
+              message: 'infrastructure/** must not depend on presentation/**.',
+            },
+            {
+              target: './src/presentation',
+              from: ['./src/domain', './src/infrastructure'],
+              message:
+                'presentation/** must depend only on application/** (not domain/** or infrastructure/**).',
+            },
+          ],
+        },
+      ],
 
       // ---- Unicorn tweaks ----
       'unicorn/prevent-abbreviations': 'off',
@@ -169,6 +205,14 @@ export default tseslint.config(
       'import-x/no-named-as-default-member': 'off',
       '@typescript-eslint/no-deprecated': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+
+  // Override: composition root — exempt from layer dependency rule
+  {
+    files: ['src/main.ts', 'src/app.module.ts'],
+    rules: {
+      'import-x/no-restricted-paths': 'off',
     },
   },
 

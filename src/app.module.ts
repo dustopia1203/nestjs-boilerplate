@@ -1,17 +1,15 @@
 import { Module } from '@nestjs/common';
 
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { SharedModule } from '@presentation/rest/shared/shared.module';
 
 /**
- * Root application module wiring the controller and service together.
+ * Root application module — composition root.
  *
- * Intentionally minimal — additional feature modules should be imported here
- * as the application grows.
+ * Imports feature/cross-cutting modules. Intentionally contains no
+ * controllers or providers of its own; everything is wired through the
+ * imported modules.
  */
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [SharedModule],
 })
 export class AppModule {}

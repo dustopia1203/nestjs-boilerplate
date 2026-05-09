@@ -16,9 +16,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:cov": "jest --coverage",
     "audit": "bun audit --prod --audit-level=high",
     "secrets:scan": "secretlint --secretlintignore .gitignore \"**/*\"",
-    "check": "bun run typecheck && bun run lint && bun run format:check && bun run audit && bun run secrets:scan",
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun run audit && bun run secrets:scan && bun run test:cov",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -52,7 +53,31 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "main\\.ts$",
+      "app\\.module\\.ts$",
+      ".*\\.module\\.ts$"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 90,
+        "statements": 90,
+        "functions": 90,
+        "branches": 90
+      }
+    },
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@domain/(.*)$": "<rootDir>/domain/$1",
+      "^@application/(.*)$": "<rootDir>/application/$1",
+      "^@infrastructure/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@presentation/(.*)$": "<rootDir>/presentation/$1"
+    }
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.0",

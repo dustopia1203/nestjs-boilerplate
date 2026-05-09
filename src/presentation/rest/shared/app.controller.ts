@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 
-import { AppService } from './app.service';
+import { AppService } from '@application/shared/service/app.service';
 
 /**
  * Root HTTP controller serving the smoke-test greeting endpoint.
