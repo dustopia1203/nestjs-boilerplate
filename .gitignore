@@ -1,0 +1,33 @@
+# IDE/Code Editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+.cursor/
+.DS_Store
+
+# Node Modules
+node_modules/
+
+# Env
+.env
+.env.*
+
+# Development docs (specs, plans, etc.)
+docs/
+
+# Build output
+dist/
+
+# Test/coverage output
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS
+Thumbs.db
+
+# TypeScript incremental
+*.tsbuildinfo

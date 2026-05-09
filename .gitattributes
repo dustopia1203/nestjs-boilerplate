@@ -1,0 +1,10 @@
+# Force LF line endings for all text files in the working tree.
+# This prevents Windows autocrlf from converting LF to CRLF in shell scripts
+# (.husky/pre-commit, .husky/commit-msg), which would break them on Unix/macOS.
+* text=auto eol=lf
+
+# Binary files — never touch line endings
+*.png binary
+*.jpg binary
+*.ico binary
+bun.lock binary

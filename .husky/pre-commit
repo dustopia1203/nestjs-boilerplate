@@ -1,0 +1,5 @@
+# Pre-commit: lint-staged runs ESLint, Prettier, secretlint, and bun audit
+# (per the lint-staged config in package.json).
+# Bypass: git commit --no-verify (discouraged)
+
+bunx --no-install lint-staged
