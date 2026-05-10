@@ -1,19 +1,28 @@
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
+import { appConfig, type AppConfig } from '@application/config/app.config';
 
 import { AppModule } from './app.module';
 
 /**
- * Bootstrap the NestJS application and start the HTTP listener.
+ * Starts the app: mounts Swagger at `/api-docs`, then listens on the configured port.
  *
- * Reads the `PORT` environment variable (defaults to `3000`) and binds the
- * Express adapter to that port. Any startup error is propagated so the
- * process exits with a non-zero status.
- *
- * @returns A promise that resolves once the server is listening.
+ * @returns Resolves once the HTTP server is bound and listening.
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const port = Number.parseInt(process.env['PORT'] ?? '3000', 10);
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('myagt')
+    .setDescription('myagt API documentation')
+    .setVersion('1.0.0')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api-docs', app, document);
+
+  const { port } = app.get<AppConfig>(appConfig.KEY);
   await app.listen(port);
 }
 

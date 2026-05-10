@@ -1,4 +1,5 @@
 // @ts-check
+import { plugin as nestjsTyped } from '@darraghor/eslint-plugin-nestjs-typed';
 import eslint from '@eslint/js';
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import prettierConfig from 'eslint-config-prettier';
@@ -127,8 +128,7 @@ export default tseslint.config(
             {
               target: './src/application',
               from: ['./src/infrastructure', './src/presentation'],
-              message:
-                'application/** must not depend on infrastructure/** or presentation/**.',
+              message: 'application/** must not depend on infrastructure/** or presentation/**.',
             },
             {
               target: './src/infrastructure',
@@ -213,6 +213,19 @@ export default tseslint.config(
     files: ['src/main.ts', 'src/app.module.ts'],
     rules: {
       'import-x/no-restricted-paths': 'off',
+    },
+  },
+
+  // Override: REST controllers — enforce OpenAPI decorators on every route method
+  {
+    files: ['src/presentation/rest/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+    plugins: {
+      '@darraghor/nestjs-typed': nestjsTyped,
+    },
+    rules: {
+      '@darraghor/nestjs-typed/api-method-should-specify-api-operation': 'error',
+      '@darraghor/nestjs-typed/api-method-should-specify-api-response': 'error',
     },
   },
 

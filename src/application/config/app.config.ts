@@ -9,16 +9,11 @@ const appConfigSchema = z.object({
 });
 
 /**
- * Pure parser for the application config group.
+ * Validates an env-like record and returns a typed, camelCase config object.
  *
- * Validates an env-like record against the Zod schema and projects the raw
- * uppercase env names to the camelCase shape used by application code.
- * Exported separately from {@link appConfig} so it can be unit-tested without
- * Nest DI or `process.env` mutation.
- *
- * @param env - A record mimicking `process.env` (string values keyed by env name).
- * @returns The validated, camelCased config object.
- * @throws {z.ZodError} When any value fails validation or coercion.
+ * @param env - Raw env record (mirrors `process.env`).
+ * @returns Validated config with `port` and `nodeEnv`.
+ * @throws {z.ZodError} On invalid or missing required values.
  */
 export function parseAppConfig(env: Record<string, string | undefined>): {
   port: number;
@@ -29,16 +24,11 @@ export function parseAppConfig(env: Record<string, string | undefined>): {
 }
 
 /**
- * Registered `app` config group.
- *
- * Consumed by `ConfigModule.forRoot({ load: [appConfig] })` in the composition
- * root and injected elsewhere via `@Inject(appConfig.KEY)`.
+ * Registered `app` config group. Load via `ConfigModule` and inject with `appConfig.KEY`.
  */
 export const appConfig = registerAs('app', () => parseAppConfig(process.env));
 
 /**
- * Type of the resolved `app` config, inferred from {@link appConfig}.
- *
- * Use as the parameter type when injecting: `config: AppConfig`.
+ * Resolved type of the `app` config group.
  */
 export type AppConfig = ConfigType<typeof appConfig>;

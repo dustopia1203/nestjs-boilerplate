@@ -14,8 +14,16 @@ every `git commit` (see `.husky/pre-commit` and `eslint.config.mjs`):
 
 - **JSDoc is mandatory** on every function, class, method, getter, setter,
   interface, type alias, and enum in `src/`. Missing JSDoc fails the commit.
-  - Required tags: description, `@param <name> - <description>` for each
-    parameter, `@returns <description>` (unless return type is `void`).
+  - Description: one short sentence — what it does, nothing more.
+  - `@param <name> - <description>`: required for each parameter, one phrase.
+  - `@returns <description>`: required unless the return type is `void`, one phrase.
+  - Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
+- **OpenAPI decorators are mandatory** on every route method in
+  `src/presentation/rest/**`. A method decorated with `@Get`, `@Post`,
+  `@Put`, `@Patch`, or `@Delete` that lacks `@ApiOperation` or at least one
+  `@ApiResponse` fails the pre-commit hook.
+  - Enforced by `@darraghor/nestjs-typed` in `eslint.config.mjs`.
+  - Also add `@ApiTags('<name>')` at the class level (convention, not linted).
   - Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
 - **Strict TypeScript:** `strict`, `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`,
@@ -61,9 +69,8 @@ violations rather than silently rewriting (see "Surgical Changes" below).
 8. **Comments explain _why_, never _what_.** The code already shows what.
    Comments earn their keep by capturing trade-offs, links to issues, or
    non-obvious constraints.
-9. **JSDoc captures _intent_, not types.** TypeScript provides types; JSDoc
-   tells the reader what a symbol is _for_ and how it should be used. (See
-   the hard gate above.)
+9. **JSDoc is one short sentence.** Say what the symbol does — nothing the
+   type signature already tells. No paragraphs, no rephrasing of param types.
 
 ---
 
@@ -239,6 +246,25 @@ Each protocol folder is further divided by bounded context when contexts exist:
 `src/main.ts` and `src/app.module.ts` may import from any layer. Do not
 bypass `AppModule` to wire feature modules — every feature module is
 imported into `AppModule` (directly or transitively).
+
+### Health endpoints
+
+The application exposes three Kubernetes-style probes under `presentation/rest/health/`:
+
+| Route                 | K8s probe | Meaning                        |
+| --------------------- | --------- | ------------------------------ |
+| `GET /health/live`    | Liveness  | Process is alive.              |
+| `GET /health/ready`   | Readiness | App is ready to serve traffic. |
+| `GET /health/startup` | Startup   | App has finished starting up.  |
+
+Each probe calls `HealthCheckService.check([indicatorArray])` from
+`@nestjs/terminus`. The arrays are intentionally empty today — new indicators
+(disk usage, memory heap, DB ping, external HTTP) are added directly inside
+the relevant probe method's array, with no controller-shape change.
+
+OpenAPI documentation for all routes (including these) is served at
+`GET /api-docs` (Swagger UI) and `GET /api-docs-json` (raw spec). The setup
+lives in `src/main.ts`.
 
 ## Test-Driven Development
 

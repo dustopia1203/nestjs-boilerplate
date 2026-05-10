@@ -2,15 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { appConfig } from '@application/config/app.config';
-import { SharedModule } from '@presentation/rest/shared/shared.module';
+import { HealthModule } from '@presentation/rest/health/health.module';
 
 /**
- * Root application module — composition root.
- *
- * Imports feature/cross-cutting modules and wires the global
- * `ConfigModule` so the validated `app` config group is available
- * everywhere via DI. Intentionally contains no controllers or providers
- * of its own; everything is wired through the imported modules.
+ * Root application module. Wires `ConfigModule` globally and imports all feature modules.
  */
 @Module({
   imports: [
@@ -19,7 +14,7 @@ import { SharedModule } from '@presentation/rest/shared/shared.module';
       envFilePath: '.env',
       load: [appConfig],
     }),
-    SharedModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
