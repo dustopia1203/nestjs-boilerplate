@@ -11,6 +11,8 @@ node_modules/
 # Env
 .env
 .env.*
+# Allow committing the env template
+!.env.example
 
 # Development docs (specs, plans, etc.)
 docs/

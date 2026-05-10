@@ -1,6 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { AppService } from '@application/shared/service/app.service';
+import { AppService } from '@application/service/app.service';
 
 import { AppController } from './app.controller';
 

@@ -140,9 +140,7 @@ Strong success criteria let you loop independently. Weak criteria
 ## Project Architecture
 
 Layer-first DDD + Clean Architecture with convention-based CQRS. The `src/`
-tree is sliced by Clean Architecture layer; each layer owns a `shared/`
-sub-folder for cross-cutting code that does not yet belong to a real
-bounded context.
+tree is sliced by Clean Architecture layer.
 
 | Layer             | Responsibility                                                                                                        |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -183,7 +181,8 @@ path (`./foo`) for **same-folder siblings**.
 
 ### Application layer sub-folders
 
-Each bounded context under `application/<context>/` may contain:
+Sub-folders live directly under `application/` (or under a bounded-context
+sub-folder `application/<context>/` once real contexts are introduced):
 
 | Folder     | Purpose                                                       |
 | ---------- | ------------------------------------------------------------- |
@@ -195,7 +194,7 @@ Each bounded context under `application/<context>/` may contain:
 ### CQRS convention
 
 Use-cases are plain classes, **one file per use-case**, placed directly inside
-`application/<context>/`:
+`application/` (or `application/<context>/` once bounded contexts are introduced):
 
 - `<action>.command.ts` — state-changing operation. Handler in the same file
   or a sibling `<action>.command-handler.ts`.
@@ -220,20 +219,20 @@ without moving files.
 | `graphql/` | GraphQL resolvers, input types (future). |
 | `ws/`      | WebSocket gateways (future).             |
 
-Each protocol folder mirrors the bounded-context structure of `application/`:
+Each protocol folder is further divided by bounded context when contexts exist:
 `presentation/rest/<context>/`.
 
 ### Where does new code go?
 
-| What                                     | Where                                                                   |
-| ---------------------------------------- | ----------------------------------------------------------------------- |
-| New REST endpoint                        | `presentation/rest/<context>/`                                          |
-| New use-case                             | `application/<context>/` — `<action>.command.ts` or `<action>.query.ts` |
-| New application service                  | `application/<context>/service/`                                        |
-| New DTO                                  | `application/<context>/dto/`                                            |
-| New mapper                               | `application/<context>/mapper/`                                         |
-| New entity / value object / domain event | `domain/<context>/`                                                     |
-| New DB or HTTP-client adapter            | `infrastructure/<context>/`                                             |
+| What                                     | Where                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| New REST endpoint                        | `presentation/rest/<context>/`                                                              |
+| New use-case                             | `application/` (or `application/<context>/`) — `<action>.command.ts` or `<action>.query.ts` |
+| New application service                  | `application/service/` (or `application/<context>/service/`)                                |
+| New DTO                                  | `application/dto/` (or `application/<context>/dto/`)                                        |
+| New mapper                               | `application/mapper/` (or `application/<context>/mapper/`)                                  |
+| New entity / value object / domain event | `domain/<context>/`                                                                         |
+| New DB or HTTP-client adapter            | `infrastructure/<context>/`                                                                 |
 
 ### Composition root exception
 
