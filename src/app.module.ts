@@ -4,7 +4,7 @@ import { LoggerModule, type Params } from 'nestjs-pino';
 
 import { appConfig } from '@application/config/app.config';
 import { loggerConfig, type LoggerConfig } from '@application/config/logger.config';
-import { HealthModule } from '@presentation/rest/health/health.module';
+import { HealthModule } from '@presentation/rest/api/health/health.module';
 
 /**
  * Builds pino-http options from the validated logger config.
