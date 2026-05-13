@@ -1,26 +1,57 @@
 import { registerAs, type ConfigType } from '@nestjs/config';
 import { z } from 'zod';
 
+import { LOG_LEVELS, type LogLevel } from '../enum/log-level.enum';
+
 const DEFAULT_PORT = 3000;
 
 const appConfigSchema = z.object({
   PORT: z.coerce.number().int().positive().default(DEFAULT_PORT),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
 });
+
+/**
+ * Returns the default Pino log level for a given runtime environment.
+ *
+ * @param nodeEnv - The validated runtime environment string.
+ * @returns The corresponding Pino log level.
+ */
+export function defaultLevelForEnv(nodeEnv: 'development' | 'production' | 'test'): LogLevel {
+  switch (nodeEnv) {
+    case 'development': {
+      return 'debug';
+    }
+    case 'production': {
+      return 'info';
+    }
+    case 'test': {
+      return 'silent';
+    }
+  }
+}
 
 /**
  * Validates an env-like record and returns a typed, camelCase config object.
  *
  * @param env - Raw env record (mirrors `process.env`).
- * @returns Validated config with `port` and `nodeEnv`.
+ * @returns Validated config with `port`, `nodeEnv`, `logLevel`, and `prettyPrint`.
  * @throws {z.ZodError} On invalid or missing required values.
  */
 export function parseAppConfig(env: Record<string, string | undefined>): {
   port: number;
   nodeEnv: 'development' | 'production' | 'test';
+  logLevel: LogLevel;
+  prettyPrint: boolean;
 } {
   const parsed = appConfigSchema.parse(env);
-  return { port: parsed.PORT, nodeEnv: parsed.NODE_ENV };
+  const logLevel = parsed.LOG_LEVEL ?? defaultLevelForEnv(parsed.NODE_ENV);
+  return {
+    port: parsed.PORT,
+    nodeEnv: parsed.NODE_ENV,
+    logLevel,
+    prettyPrint: parsed.NODE_ENV === 'development' && logLevel !== 'silent',
+  };
 }
 
 /**

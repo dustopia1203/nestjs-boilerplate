@@ -198,6 +198,18 @@ sub-folder `application/<context>/` once real contexts are introduced):
 | `mapper/`  | Transform domain objects to/from DTOs.                        |
 | `config/`  | Application-level feature flags, settings, constants.         |
 
+### Env single source of truth
+
+All environment variables — validation, defaults, and type coercion — are declared in
+`src/application/config/app.config.ts` **only**. No other file in `src/` may:
+
+- reference `process.env` directly, or
+- define a Zod (or any other) schema over raw env vars.
+
+Config modules outside `app.config.ts` must accept already-validated `AppConfig` as
+input. New env vars go into `appConfigSchema` first; only then may other config files
+consume them via `AppConfig`.
+
 ### CQRS convention
 
 Use-cases are plain classes, **one file per use-case**, placed directly inside
