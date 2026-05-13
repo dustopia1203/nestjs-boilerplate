@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
 import { LoggerModule, type Params } from 'nestjs-pino';
 
 import { appConfig } from '@application/config/app.config';
 import { loggerConfig, type LoggerConfig } from '@application/config/logger.config';
 import { HealthModule } from '@presentation/rest/api/health/health.module';
+import { GlobalExceptionFilter } from '@presentation/rest/filters/global-exception.filter';
 
 /**
  * Builds pino-http options from the validated logger config.
@@ -39,5 +41,6 @@ function buildLoggerParams(config: LoggerConfig): Params {
     }),
     HealthModule,
   ],
+  providers: [{ provide: APP_FILTER, useClass: GlobalExceptionFilter }],
 })
 export class AppModule {}
