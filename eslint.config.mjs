@@ -281,18 +281,6 @@ export default tseslint.config(
     },
   },
 
-  {
-    files: ['scripts/architecture-boundaries.test.mjs'],
-    extends: [tseslint.configs.disableTypeChecked],
-    rules: {
-      'jsdoc/require-jsdoc': 'off',
-      'jsdoc/require-description': 'off',
-      'jsdoc/require-param': 'off',
-      'jsdoc/require-returns': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-    },
-  },
-
   // MUST be last — disables stylistic rules in favor of Prettier
   prettierConfig,
 );

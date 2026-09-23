@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/.codex/hooks/policy.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking protected files and commit gates"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/.codex/hooks/policy.py\"",
+            "timeout": 120,
+            "statusMessage": "Linting and formatting edited TypeScript"
+          }
+        ]
+      }
+    ]
+  }
+}

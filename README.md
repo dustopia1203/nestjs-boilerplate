@@ -27,7 +27,6 @@ bun install            # installs deps and (after git init) activates Husky hook
 bun run start:dev      # boots Nest on http://localhost:3000
 bun run test                 # Jest unit tests
 bun run test:cov             # Unit coverage with the existing 90% thresholds
-bun run test:architecture    # ESLint layer-boundary fixture tests
 bun run check                # Existing local checks; excludes e2e
 curl http://localhost:3000/health/live
 ```
@@ -59,8 +58,6 @@ src/
 │           └── global-exception.filter.ts
 ├── app.module.ts             # composition root
 └── main.ts                   # bootstrap
-scripts/
-└── architecture-boundaries.test.mjs
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for the full dependency rule and per-layer
@@ -70,7 +67,9 @@ responsibilities.
 
 The scaffold uses Clean Architecture layer boundaries and a convention for
 future CQRS use-cases. Layer and framework import restrictions are enforced by
-ESLint, with fixture tests in `scripts/architecture-boundaries.test.mjs`.
+ESLint. Conventions ESLint cannot check are reviewed by the
+`architecture-reviewer` subagent in `.claude/agents/` (Claude Code) or
+`.codex/agents/` (Codex).
 `application/error/` owns semantic error keys and diagnostic messages;
 `presentation/rest/error/` maps them to public codes, statuses, and messages.
 Plain use-case DTOs belong in `application/dto/`; HTTP response envelopes and
@@ -89,6 +88,44 @@ reused.
 
 The health endpoints currently have empty indicator arrays. Add readiness
 checks when required external dependencies are introduced.
+
+## Codex hooks and architecture review
+
+Project configuration lives in `.codex/config.toml`, with native hooks in
+`.codex/hooks.json` and a read-only `architecture-reviewer` custom agent.
+Requires a Codex client supporting `PreToolUse`/`PostToolUse` and project agent
+TOML files (checked with Codex CLI 0.156.1), Python 3.9+, Git, and `bun install`.
+
+Start a new Codex session in this trusted project, then open `/hooks` in the CLI
+to review and trust the hook definitions. New or changed definitions are skipped
+until trusted; creating these files does not activate them in an existing chat.
+See the official [hook trust instructions](https://learn.chatgpt.com/docs/hooks).
+
+- Before tool calls: block explicit `.env`/`.env.*` access (except
+  `.env.example`), including common file-tool arguments and literal symlink
+  targets. Block direct lockfile patches and common commit-gate bypasses.
+- After `apply_patch` (`Edit`/`Write` aliases): run ESLint autofix and Prettier
+  on existing `.ts`/`.mts`/`.cts` targets, including multiple files and renames.
+  Return lint or format failures to Codex. Shell/MCP edits require the agent to
+  run these checks explicitly, as instructed in `AGENTS.md`.
+- After completing source changes: `AGENTS.md` requires the architecture
+  reviewer; the post-edit hook also adds a reminder. The parent agent invokes
+  the subagent, resolves blocking findings, and reports the result. The hook
+  itself does not launch a model or replace ESLint's boundary rules.
+
+These hooks guard recognizable tool inputs, not every possible file read.
+Computed paths, broad recursive commands, interactive shell input, external MCP
+servers, and tools outside Codex's hook coverage can evade input checks. Use
+filesystem sandbox restrictions or keep real secrets outside the agent's
+workspace if strict isolation is required. Do not treat a trusted hook as an OS
+security boundary.
+
+Run the hook tests from the repository root (uses synthetic temporary files and
+the installed ESLint/Prettier, never local secret contents):
+
+```bash
+python3 -B .codex/hooks/test_policy.py
+```
 
 ## First-time git setup
 
@@ -118,9 +155,8 @@ e2e is managed in a separate repository.
 | pre-commit | `bun audit --prod --audit-level=high` | dep CVEs (only when `package.json` is staged)                      |
 | commit-msg | commitlint                            | Conventional Commits                                               |
 
-The local `bun run check` command runs typecheck, lint, architecture-boundary
-tests, source/test TypeScript format checks, audit, secrets scan, and
-`bun run test:cov`. It excludes e2e.
+The local `bun run check` command runs typecheck, lint, source/test TypeScript
+format checks, audit, secrets scan, and `bun run test:cov`. It excludes e2e.
 The 90% coverage thresholds are documented in `AGENTS.md`.
 
 ## Adding a function
@@ -144,19 +180,18 @@ Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
 
 ## Scripts
 
-| Command                     | Description                                                      |
-| --------------------------- | ---------------------------------------------------------------- |
-| `bun run start:dev`         | Run Nest in watch mode                                           |
-| `bun run build`             | Compile to `dist/`                                               |
-| `bun run start:prod`        | Run the compiled app                                             |
-| `bun run test`              | Unit tests (Jest)                                                |
-| `bun run test:e2e`          | Legacy local e2e command; the separate repository owns e2e tests |
-| `bun run test:cov`          | Unit tests + 90% coverage floor                                  |
-| `bun run test:architecture` | ESLint layer-boundary fixture tests                              |
-| `bun run lint`              | Lint with `--max-warnings=0`                                     |
-| `bun run lint:fix`          | Lint + autofix                                                   |
-| `bun run format`            | Format with Prettier                                             |
-| `bun run typecheck`         | `tsc --noEmit`                                                   |
-| `bun run audit`             | `bun audit --prod --audit-level=high`                            |
-| `bun run secrets:scan`      | Full-tree secretlint scan                                        |
-| `bun run check`             | Existing local checks; excludes e2e                              |
+| Command                | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `bun run start:dev`    | Run Nest in watch mode                                           |
+| `bun run build`        | Compile to `dist/`                                               |
+| `bun run start:prod`   | Run the compiled app                                             |
+| `bun run test`         | Unit tests (Jest)                                                |
+| `bun run test:e2e`     | Legacy local e2e command; the separate repository owns e2e tests |
+| `bun run test:cov`     | Unit tests + 90% coverage floor                                  |
+| `bun run lint`         | Lint with `--max-warnings=0`                                     |
+| `bun run lint:fix`     | Lint + autofix                                                   |
+| `bun run format`       | Format with Prettier                                             |
+| `bun run typecheck`    | `tsc --noEmit`                                                   |
+| `bun run audit`        | `bun audit --prod --audit-level=high`                            |
+| `bun run secrets:scan` | Full-tree secretlint scan                                        |
+| `bun run check`        | Existing local checks; excludes e2e                              |

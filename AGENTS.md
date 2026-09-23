@@ -42,6 +42,28 @@ local commands enforce (see `.husky/pre-commit` and `eslint.config.mjs`):
 
 To bypass for a single commit (discouraged): `git commit --no-verify`.
 
+## Codex workflow
+
+- Never read or modify `.env` or `.env.*` files, including through shell,
+  scripts, symlinks, or MCP tools. `.env.example` is the allowed template.
+  Exclude secret files from recursive searches and diffs. Do not bypass a
+  protection hook with another tool or an obfuscated command.
+- Use `apply_patch` for source edits. Trusted `.codex/hooks.json` hooks run
+  ESLint with autofix and Prettier on edited TypeScript files and return errors
+  to the agent. Fix those errors before continuing. If a task requires another
+  editing tool, run the same checks explicitly on its changed files.
+- Do not hand-edit `bun.lock` or bypass commit gates without an explicit user
+  instruction. Use Bun's dependency commands to update the lockfile.
+- After implementing or modifying `src/`, invoke the read-only
+  `architecture-reviewer` in `.codex/agents/architecture-reviewer.toml` before
+  completion or committing. Give it the task scope and changed files, address
+  blocking findings, and request a follow-up when fixes alter architecture.
+  Review the completed change once, not after every edit. Reviewers must not
+  recursively invoke another reviewer.
+- If custom agent roles are unavailable but subagents are supported, pass the
+  role's instructions and scope to a read-only subagent. If delegation is
+  unavailable, report that limitation rather than claiming the review ran.
+
 ---
 
 ## Clean Code Principles
