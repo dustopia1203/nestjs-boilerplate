@@ -1,7 +1,6 @@
 # IDE/Code Editor
 .idea/
-.vscode/*
-!.vscode/settings.json
+.vscode/
 .DS_Store
 
 # Node Modules
