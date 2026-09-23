@@ -1,8 +1,7 @@
-import { randomUUID } from 'node:crypto';
-
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { v7 as uuidv7 } from 'uuid';
 import { ZodError } from 'zod';
 
 import { ApplicationException } from '@application/error/application.exception';
@@ -25,8 +24,8 @@ interface Classification {
 
 /** Metadata forwarded to every structured log entry. */
 interface LogMeta {
-  /** Trace identifier for log correlation. */
-  traceId: string;
+  /** Request identifier for log correlation. */
+  requestId: string;
   /** Request URL path. */
   path: string;
   /** Original thrown value. */
@@ -64,11 +63,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const { error, cause, context } = this.classify(exception);
     // pino-http augments IncomingMessage with `id: ReqId`; guard covers object-type ids and
     // unit-test mocks that omit the field
-    const traceId =
-      typeof req.id === 'string' || typeof req.id === 'number' ? String(req.id) : randomUUID();
+    const requestId =
+      typeof req.id === 'string' || typeof req.id === 'number' ? String(req.id) : uuidv7();
+    res.setHeader('X-Request-Id', requestId);
 
     this.log(error, {
-      traceId,
+      requestId,
       path: req.url,
       cause,
       // exactOptionalPropertyTypes: only spread when defined to avoid explicit `undefined`
@@ -79,7 +79,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: { code: error.code, name: error.name, message: error.message },
       timestamp: Date.now(),
       path: req.url,
-      traceId,
+      requestId,
     } satisfies ErrorResponseDto);
   }
 
@@ -136,7 +136,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       err: meta.cause,
       errorCode: error.code,
       errorName: error.name,
-      traceId: meta.traceId,
+      requestId: meta.requestId,
       path: meta.path,
       context: meta.context,
     };

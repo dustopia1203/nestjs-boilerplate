@@ -76,7 +76,7 @@ describe('GlobalExceptionFilter (e2e)', () => {
         expect(body).toMatchObject({
           error: { code: 401_000_002, name: 'UNAUTHORISED' },
         });
-        expect(body.traceId).toBeDefined();
+        expect(body.requestId).toBeDefined();
         expect(body.timestamp).toBeDefined();
         expect(body).not.toHaveProperty('context');
       });
@@ -88,7 +88,7 @@ describe('GlobalExceptionFilter (e2e)', () => {
       .expect(502)
       .expect(({ body }: { body: Record<string, unknown> }) => {
         expect(body).toMatchObject({ error: { name: 'BAD_GATEWAY' } });
-        expect(body.traceId).toBeDefined();
+        expect(body.requestId).toBeDefined();
       });
   });
 
@@ -98,7 +98,7 @@ describe('GlobalExceptionFilter (e2e)', () => {
       .expect(400)
       .expect(({ body }: { body: Record<string, unknown> }) => {
         expect(body).toMatchObject({ error: { name: 'VALIDATION_FAILED' } });
-        expect(body.traceId).toBeDefined();
+        expect(body.requestId).toBeDefined();
       });
   });
 
@@ -109,7 +109,7 @@ describe('GlobalExceptionFilter (e2e)', () => {
       .expect(({ body }: { body: Record<string, unknown> }) => {
         expect(body).toMatchObject({ error: { name: 'UNKNOWN' } });
         expect(body).not.toHaveProperty('stack');
-        expect(body.traceId).toBeDefined();
+        expect(body.requestId).toBeDefined();
       });
   });
 });

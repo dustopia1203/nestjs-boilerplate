@@ -17,8 +17,8 @@ interface ResponseBody {
   timestamp: number;
   /** Request path. */
   path: string;
-  /** pino-http trace identifier. */
-  traceId: string;
+  /** pino-http request identifier. */
+  requestId: string;
 }
 
 function makeLogger(): jest.Mocked<Pick<PinoLogger, 'error' | 'warn' | 'info'>> {
@@ -28,17 +28,19 @@ function makeLogger(): jest.Mocked<Pick<PinoLogger, 'error' | 'warn' | 'info'>> 
 function makeHost(reqOverrides: Record<string, unknown> = {}): {
   host: ArgumentsHost;
   statusFn: jest.Mock;
+  setHeaderFn: jest.Mock;
   jsonFn: jest.Mock<unknown, [unknown]>;
 } {
   const jsonFn = jest.fn<unknown, [unknown]>();
   const statusFn = jest.fn().mockReturnValue({ json: jsonFn });
+  const setHeaderFn = jest.fn();
   const host = {
     switchToHttp: () => ({
       getRequest: () => ({ url: '/test', ...reqOverrides }),
-      getResponse: () => ({ status: statusFn }),
+      getResponse: () => ({ status: statusFn, setHeader: setHeaderFn }),
     }),
   } as unknown as ArgumentsHost;
-  return { host, statusFn, jsonFn };
+  return { host, statusFn, setHeaderFn, jsonFn };
 }
 
 describe('GlobalExceptionFilter', () => {
@@ -70,7 +72,7 @@ describe('GlobalExceptionFilter', () => {
 
     it('uses the mapped status and code', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
-      const { host, statusFn, jsonFn } = makeHost({ id: 'trace-1' });
+      const { host, statusFn, jsonFn } = makeHost({ id: 'request-1' });
 
       filter.catch(
         new ApplicationException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }),
@@ -81,7 +83,7 @@ describe('GlobalExceptionFilter', () => {
       const body = jsonFn.mock.calls[0]?.[0] as ResponseBody;
       expect(body.error.code).toBe(401_000_002);
       expect(body.error.name).toBe('UNAUTHORISED');
-      expect(body.traceId).toBe('trace-1');
+      expect(body.requestId).toBe('request-1');
     });
 
     it('does not include context in the response body', () => {
@@ -195,24 +197,29 @@ describe('GlobalExceptionFilter', () => {
     });
   });
 
-  describe('traceId', () => {
+  describe('requestId', () => {
     it('uses req.id when present', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
-      const { host, jsonFn } = makeHost({ id: 'my-trace' });
+      const { host, jsonFn } = makeHost({ id: 'my-request' });
 
       filter.catch(new Error('test error'), host);
 
-      expect((jsonFn.mock.calls[0]?.[0] as ResponseBody).traceId).toBe('my-trace');
+      expect((jsonFn.mock.calls[0]?.[0] as ResponseBody).requestId).toBe('my-request');
     });
 
-    it('generates a UUID when req.id is absent', () => {
-      const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
-      const { host, jsonFn } = makeHost();
+    it('generates a UUID v7 when req.id is absent', () => {
+      const logger = makeLogger();
+      const filter = new GlobalExceptionFilter(logger as unknown as PinoLogger);
+      const { host, jsonFn, setHeaderFn } = makeHost();
 
       filter.catch(new Error('test error'), host);
 
-      expect((jsonFn.mock.calls[0]?.[0] as ResponseBody).traceId).toMatch(
-        /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/,
+      const requestId = (jsonFn.mock.calls[0]?.[0] as ResponseBody).requestId;
+      expect(requestId).toMatch(/^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+      expect(setHeaderFn).toHaveBeenCalledWith('X-Request-Id', requestId);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ requestId }),
+        'Internal server error',
       );
     });
   });
@@ -257,16 +264,16 @@ describe('GlobalExceptionFilter', () => {
       const now = 1_747_141_920_123;
       jest.spyOn(Date, 'now').mockReturnValue(now);
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
-      const { host, jsonFn } = makeHost({ id: 'trace-ms' });
+      const { host, jsonFn } = makeHost({ id: 'request-ms' });
 
       filter.catch(new Error('failure'), host);
 
       expect(jsonFn).toHaveBeenCalledWith(expect.objectContaining({ timestamp: now }));
     });
 
-    it('always includes error, timestamp, path, and traceId', () => {
+    it('always includes error, timestamp, path, and requestId', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
-      const { host, jsonFn } = makeHost({ id: 'trace-x' });
+      const { host, jsonFn } = makeHost({ id: 'request-x' });
 
       filter.catch(new Error('test error'), host);
 
@@ -274,7 +281,7 @@ describe('GlobalExceptionFilter', () => {
       expect(body).toHaveProperty('error');
       expect(body).toHaveProperty('timestamp');
       expect(body).toHaveProperty('path');
-      expect(body).toHaveProperty('traceId', 'trace-x');
+      expect(body).toHaveProperty('requestId', 'request-x');
     });
   });
 });

@@ -33,7 +33,7 @@ export class ErrorResponseDto {
   @ApiProperty({ example: '/health/live' })
   public path!: string;
 
-  /** Trace identifier from pino-http for log correlation. */
-  @ApiProperty({ example: 'a3f9c2e1-4b5a-6c7d-8e9f-0a1b2c3d4e5f' })
-  public traceId!: string;
+  /** Request identifier from pino-http for log correlation. */
+  @ApiProperty({ example: '01941f29-7c00-73e4-a310-744d2167fc5b' })
+  public requestId!: string;
 }

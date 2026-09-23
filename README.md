@@ -82,6 +82,11 @@ previously used seconds; consumers in the separate e2e repository must expect
 milliseconds. Public error codes, names, messages, and statuses are otherwise
 preserved by this cleanup.
 
+Every HTTP request receives a server-generated UUID v7 request ID. The
+`X-Request-Id` response header is present on success and error responses; error
+bodies and request logs use the same ID. Incoming `X-Request-Id` headers are not
+reused.
+
 The health endpoints currently have empty indicator arrays. Add readiness
 checks when required external dependencies are introduced.
 

@@ -13,7 +13,7 @@ describe('ErrorBodyDto', () => {
 });
 
 describe('ErrorResponseDto', () => {
-  it('holds error, timestamp, path, and traceId properties', () => {
+  it('holds error, timestamp, path, and requestId properties', () => {
     const body = new ErrorBodyDto();
     body.code = 401_000_002;
     body.name = 'UNAUTHORISED';
@@ -23,11 +23,11 @@ describe('ErrorResponseDto', () => {
     dto.error = body;
     dto.timestamp = 1_747_141_920_000;
     dto.path = '/health/live';
-    dto.traceId = 'abc-123';
+    dto.requestId = 'abc-123';
 
     expect(dto.error).toBe(body);
     expect(dto.timestamp).toBe(1_747_141_920_000);
     expect(dto.path).toBe('/health/live');
-    expect(dto.traceId).toBe('abc-123');
+    expect(dto.requestId).toBe('abc-123');
   });
 });
