@@ -1,10 +1,10 @@
 # myagt
 
-A NestJS backend scaffold with strict TypeScript and a comprehensive pre-commit
-quality pipeline. The application code is intentionally minimal — the value of
-this repo is its surrounding tooling.
+A NestJS backend scaffold with strict TypeScript and layer boundaries. The
+application code is intentionally minimal; it does not yet demonstrate a
+complete DDD model.
 
-> See [`AGENT.md`](./AGENT.md) for the project-wide coding guidelines (clean
+> See [`AGENTS.md`](./AGENTS.md) for the project-wide coding guidelines (clean
 > code, JSDoc requirements, behavioural rules for AI assistants).
 
 ## Prerequisites
@@ -25,46 +25,65 @@ scanner, `secretlint`) is installed via `bun add -d` and lives inside
 ```bash
 bun install            # installs deps and (after git init) activates Husky hooks
 bun run start:dev      # boots Nest on http://localhost:3000
-bun test               # fast TDD loop (no coverage)
-bun run test:cov       # full suite with 90% coverage floor
-bun run check          # everything CI runs (typecheck + lint + format + audit + secrets + coverage)
-curl http://localhost:3000   # -> "Hello World!"
+bun run test                 # Jest unit tests
+bun run test:cov             # Unit coverage with the existing 90% thresholds
+node --test scripts/architecture-boundaries.test.mjs
+bun run check                # Existing local checks; excludes e2e
+curl http://localhost:3000/health/live
 ```
 
 ## Project structure
 
 ```text
 src/
-├── domain/              # entities, value objects, domain events. Pure TS.
-│   └── shared/
-├── application/         # use-cases, services, DTOs, mappers, config.
-│   └── shared/
-│       ├── config/      # application-level configuration
-│       ├── dto/         # data transfer objects
-│       ├── mapper/      # entity ↔ DTO mapping
-│       └── service/
-│           └── app.service.ts
-├── infrastructure/      # adapters (DB, HTTP clients, message buses, env, fs).
-│   └── shared/
-├── presentation/        # transport layer — sliced by protocol.
-│   └── rest/            # REST/HTTP slice
-│       └── shared/
-│           ├── shared.module.ts
-│           └── app.controller.ts
-├── app.module.ts        # composition root
-└── main.ts              # bootstrap
+├── application/
+│   └── error/                 # semantic keys and diagnostic messages
+│       ├── application-error.ts
+│       └── common.error.ts
+├── infrastructure/
+│   └── config/
+│       ├── app.config.ts      # raw environment parsing and defaults
+│       └── log-level.ts
+├── presentation/
+│   └── rest/
+│       ├── api/health/
+│       │   ├── health.controller.ts
+│       │   └── health.module.ts
+│       ├── dto/
+│       │   ├── api-response.dto.ts
+│       │   ├── error-response.dto.ts
+│       │   └── paging-api-response.dto.ts
+│       ├── error/
+│       │   └── http-error-mapping.ts
+│       └── filters/
+│           └── global-exception.filter.ts
+├── app.module.ts             # composition root
+└── main.ts                   # bootstrap
+scripts/
+└── architecture-boundaries.test.mjs
 ```
 
-See [`AGENT.md`](./AGENT.md) for the full dependency rule and per-layer
+See [`AGENTS.md`](./AGENTS.md) for the full dependency rule and per-layer
 responsibilities.
 
 ## Architecture
 
-Layer-first DDD + Clean Architecture with convention-based CQRS. The
-dependency rule (`domain` → nothing outward, `presentation` → only
-`application`, etc.) is enforced by `import-x/no-restricted-paths` and runs
-on every commit. See [`AGENT.md`](./AGENT.md) for the full matrix and the
-"where does new code go?" decision tree.
+The scaffold uses Clean Architecture layer boundaries and a convention for
+future CQRS use-cases. Layer and framework import restrictions are enforced by
+ESLint, with fixture tests in `scripts/architecture-boundaries.test.mjs`.
+`application/error/` owns semantic error keys and diagnostic messages;
+`presentation/rest/error/` maps them to public codes, statuses, and messages.
+Plain use-case DTOs belong in `application/dto/`; HTTP response envelopes and
+Swagger DTOs belong in `presentation/rest/dto/`. See [`AGENTS.md`](./AGENTS.md)
+for the dependency rule and file placement guidance.
+
+All response-envelope timestamps are Unix epoch milliseconds. Error timestamps
+previously used seconds; consumers in the separate e2e repository must expect
+milliseconds. Public error codes, names, messages, and statuses are otherwise
+preserved by this cleanup.
+
+The health endpoints currently have empty indicator arrays. Add readiness
+checks when required external dependencies are introduced.
 
 ## First-time git setup
 
@@ -78,12 +97,13 @@ git update-index --add --chmod=+x .husky/pre-commit
 git update-index --add --chmod=+x .husky/commit-msg
 ```
 
-After that, every commit runs the full quality pipeline.
+After that, commits run the configured staged-file checks.
 
 ## The quality pipeline
 
-Every commit runs the following gates automatically. All run on **staged files
-only** for speed.
+Pre-commit runs the staged-file checks configured by lint-staged. It does not
+run the complete typecheck/test suite. CI is not configured by this change;
+e2e is managed in a separate repository.
 
 | Stage      | Tool                                  | What it enforces                                                   |
 | ---------- | ------------------------------------- | ------------------------------------------------------------------ |
@@ -93,10 +113,9 @@ only** for speed.
 | pre-commit | `bun audit --prod --audit-level=high` | dep CVEs (only when `package.json` is staged)                      |
 | commit-msg | commitlint                            | Conventional Commits                                               |
 
-The single command `bun run check` runs all of these against the entire
-working tree (typecheck + lint + format-check + audit + secrets-scan). It is
-designed to be the same command CI invokes once CI is added. It also runs
-`bun run test:cov`, enforcing the **90% coverage floor** documented in `AGENT.md`.
+The local `bun run check` command runs typecheck, lint, source/test TypeScript
+format checks, audit, secrets scan, and `bun run test:cov`. It excludes e2e.
+The 90% coverage thresholds are documented in `AGENTS.md`.
 
 ## Adding a function
 
@@ -119,18 +138,18 @@ Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
 
 ## Scripts
 
-| Command                | Description                           |
-| ---------------------- | ------------------------------------- |
-| `bun run start:dev`    | Run Nest in watch mode                |
-| `bun run build`        | Compile to `dist/`                    |
-| `bun run start:prod`   | Run the compiled app                  |
-| `bun run test`         | Unit tests (Jest)                     |
-| `bun run test:e2e`     | End-to-end tests                      |
-| `bun run test:cov`     | Unit tests + 90% coverage floor       |
-| `bun run lint`         | Lint with `--max-warnings=0`          |
-| `bun run lint:fix`     | Lint + autofix                        |
-| `bun run format`       | Format with Prettier                  |
-| `bun run typecheck`    | `tsc --noEmit`                        |
-| `bun run audit`        | `bun audit --prod --audit-level=high` |
-| `bun run secrets:scan` | Full-tree secretlint scan             |
-| `bun run check`        | All gates against entire tree         |
+| Command                | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `bun run start:dev`    | Run Nest in watch mode                                           |
+| `bun run build`        | Compile to `dist/`                                               |
+| `bun run start:prod`   | Run the compiled app                                             |
+| `bun run test`         | Unit tests (Jest)                                                |
+| `bun run test:e2e`     | Legacy local e2e command; the separate repository owns e2e tests |
+| `bun run test:cov`     | Unit tests + 90% coverage floor                                  |
+| `bun run lint`         | Lint with `--max-warnings=0`                                     |
+| `bun run lint:fix`     | Lint + autofix                                                   |
+| `bun run format`       | Format with Prettier                                             |
+| `bun run typecheck`    | `tsc --noEmit`                                                   |
+| `bun run audit`        | `bun audit --prod --audit-level=high`                            |
+| `bun run secrets:scan` | Full-tree secretlint scan                                        |
+| `bun run check`        | Existing local checks; excludes e2e                              |

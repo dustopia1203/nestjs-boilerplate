@@ -1,16 +1,16 @@
-# AGENT.md — Coding Guidelines for `myagt`
+# AGENTS.md — Coding Guidelines for `myagt`
 
 This file is the source of truth for **how** code is written in this repo. Hard
 gates (ESLint, JSDoc, secretlint, commitlint, `bun audit`) catch mechanical
-violations on every commit. The rules below cover the **behavioural** side
-that no linter can enforce.
+violations through staged-file checks or local commands. The rules below cover
+the **behavioural** side that no linter can enforce.
 
 ---
 
 ## Project-specific hard gates
 
-Before reading the general guidelines, know what is enforced _automatically_ on
-every `git commit` (see `.husky/pre-commit` and `eslint.config.mjs`):
+Before reading the general guidelines, know what the staged-file checks and
+local commands enforce (see `.husky/pre-commit` and `eslint.config.mjs`):
 
 - **JSDoc is mandatory** on every function, class, method, getter, setter,
   interface, type alias, and enum in `src/`. Missing JSDoc fails the commit.
@@ -146,15 +146,16 @@ Strong success criteria let you loop independently. Weak criteria
 
 ## Project Architecture
 
-Layer-first DDD + Clean Architecture with convention-based CQRS. The `src/`
-tree is sliced by Clean Architecture layer.
+The scaffold uses Clean Architecture layer boundaries and a convention for
+future CQRS use-cases. The `src/` tree is sliced by layer; it does not yet
+contain a complete DDD domain model.
 
 | Layer             | Responsibility                                                                                                        |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `domain/`         | Entities, value objects, domain events, domain services. **Pure TypeScript** — no framework, no outward dependencies. |
-| `application/`    | Use-cases (commands + queries), application services, DTOs, mappers, config. Orchestrates the domain.                 |
-| `infrastructure/` | Adapters (DB, HTTP clients, message buses, env, fs).                                                                  |
-| `presentation/`   | Transport layer sliced by protocol (`rest/`, `graphql/`, `ws/`, …). Controllers, request/response mapping.            |
+| `application/`    | Plain use-cases, application services, semantic errors, and use-case input/output shapes.                             |
+| `infrastructure/` | Adapters and raw environment parsing, defaults, and coercion.                                                         |
+| `presentation/`   | Transport layer sliced by protocol (`rest/`, `graphql/`, `ws/`, …). Controllers, HTTP DTOs, and public error mapping. |
 
 ### Dependency rule
 
@@ -166,13 +167,16 @@ tree is sliced by Clean Architecture layer.
 | `presentation/**`                             | `application/**`                  | `domain/**`, `infrastructure/**`                                      |
 | `app.module.ts`, `main.ts` (composition root) | anything                          | — (exempt)                                                            |
 
-The "no NestJS in `domain/`" rule is intentional and strict. Domain code stays
-pure TypeScript so it is testable without `Test.createTestingModule`, mocks,
-or any framework setup. If a domain service needs `@Injectable()`, the
-service belongs in `application/`, not `domain/`.
+Domain and application code must not import `@nestjs/*`, `nestjs-pino`,
+`pino-http`, `express`, or `zod`, including package subpaths and type-only
+imports. Both layers stay free of framework setup. Application handlers and
+services are plain classes; instantiate them through composition-root providers
+when their dependencies require Nest wiring. Extend the explicit dependency
+restrictions when new infrastructure libraries are introduced.
 
-The rule is enforced by `import-x/no-restricted-paths` in `eslint.config.mjs`
-and runs on every commit via `lint-staged` and on `bun run check`.
+These rules are enforced by `import-x/no-restricted-paths`,
+`no-restricted-imports`, and `no-restricted-properties` in `eslint.config.mjs`.
+They run for staged source files via `lint-staged` and on `bun run check`.
 
 ### Path aliases
 
@@ -191,24 +195,26 @@ path (`./foo`) for **same-folder siblings**.
 Sub-folders live directly under `application/` (or under a bounded-context
 sub-folder `application/<context>/` once real contexts are introduced):
 
-| Folder     | Purpose                                                       |
-| ---------- | ------------------------------------------------------------- |
-| `service/` | Application services — orchestrate domain + infrastructure.   |
-| `dto/`     | Input / output data shapes crossing the application boundary. |
-| `mapper/`  | Transform domain objects to/from DTOs.                        |
-| `config/`  | Application-level feature flags, settings, constants.         |
+| Folder     | Purpose                                                |
+| ---------- | ------------------------------------------------------ |
+| `service/` | Plain application services that orchestrate use-cases. |
+| `dto/`     | Plain use-case input/output shapes.                    |
+| `mapper/`  | Transform domain objects to/from use-case DTOs.        |
+
+HTTP response envelopes, Swagger-decorated DTOs, and Swagger schema helpers
+belong in `presentation/rest/dto/`. Application errors expose a semantic key
+and diagnostic message. REST maps those keys to public codes, HTTP statuses,
+and client-facing messages.
 
 ### Env single source of truth
 
-All environment variables — validation, defaults, and type coercion — are declared in
-`src/application/config/app.config.ts` **only**. No other file in `src/` may:
+All raw environment parsing, defaults, and type coercion are declared only in
+`src/infrastructure/config/app.config.ts`. Other production source files must
+consume validated values instead of reading `process.env`. Its colocated config
+test may temporarily control `process.env` and must restore it.
 
-- reference `process.env` directly, or
-- define a Zod (or any other) schema over raw env vars.
-
-Config modules outside `app.config.ts` must accept already-validated `AppConfig` as
-input. New env vars go into `appConfigSchema` first; only then may other config files
-consume them via `AppConfig`.
+New env vars go into `appConfigSchema` first; other config consumers receive
+validated `AppConfig` values.
 
 ### CQRS convention
 
@@ -221,7 +227,8 @@ Use-cases are plain classes, **one file per use-case**, placed directly inside
 
 Rules:
 
-- Handlers are plain classes invoked directly from controllers via Nest DI.
+- Handlers are plain classes. Composition-root providers supply Nest wiring
+  when dependencies require it.
 - No bus library. No `@nestjs/cqrs`. No custom CommandBus / QueryBus interface.
 
 If the project later needs sagas, event sourcing, or many handlers benefiting
@@ -232,26 +239,30 @@ without moving files.
 
 `presentation/` is sliced by **transport protocol**, not by feature:
 
-| Folder     | Purpose                                  |
-| ---------- | ---------------------------------------- |
-| `rest/`    | NestJS REST controllers, guards, pipes.  |
-| `graphql/` | GraphQL resolvers, input types (future). |
-| `ws/`      | WebSocket gateways (future).             |
+| Folder     | Purpose                                                                      |
+| ---------- | ---------------------------------------------------------------------------- |
+| `rest/`    | NestJS REST controllers, guards, pipes, HTTP DTOs, and public error mapping. |
+| `graphql/` | GraphQL resolvers, input types (future).                                     |
+| `ws/`      | WebSocket gateways (future).                                                 |
 
 Each protocol folder is further divided by bounded context when contexts exist:
 `presentation/rest/<context>/`.
 
 ### Where does new code go?
 
-| What                                     | Where                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| New REST endpoint                        | `presentation/rest/<context>/`                                                              |
-| New use-case                             | `application/` (or `application/<context>/`) — `<action>.command.ts` or `<action>.query.ts` |
-| New application service                  | `application/service/` (or `application/<context>/service/`)                                |
-| New DTO                                  | `application/dto/` (or `application/<context>/dto/`)                                        |
-| New mapper                               | `application/mapper/` (or `application/<context>/mapper/`)                                  |
-| New entity / value object / domain event | `domain/<context>/`                                                                         |
-| New DB or HTTP-client adapter            | `infrastructure/<context>/`                                                                 |
+| What                                      | Where                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| New REST endpoint                         | `presentation/rest/<context>/`                                                              |
+| New use-case                              | `application/` (or `application/<context>/`) — `<action>.command.ts` or `<action>.query.ts` |
+| New application service                   | `application/service/` (or `application/<context>/service/`)                                |
+| New use-case DTO                          | `application/dto/` (or `application/<context>/dto/`)                                        |
+| New HTTP response envelope or Swagger DTO | `presentation/rest/dto/`                                                                    |
+| New semantic application error            | `application/error/`                                                                        |
+| New public HTTP error mapping             | `presentation/rest/error/`                                                                  |
+| New environment variable                  | `infrastructure/config/app.config.ts`                                                       |
+| New mapper                                | `application/mapper/` (or `application/<context>/mapper/`)                                  |
+| New entity / value object / domain event  | `domain/<context>/`                                                                         |
+| New DB or HTTP-client adapter             | `infrastructure/<context>/`                                                                 |
 
 ### Composition root exception
 
@@ -261,7 +272,8 @@ imported into `AppModule` (directly or transitively).
 
 ### Health endpoints
 
-The application exposes three Kubernetes-style probes under `presentation/rest/health/`:
+The application exposes three Kubernetes-style probes under
+`presentation/rest/api/health/`:
 
 | Route                 | K8s probe | Meaning                        |
 | --------------------- | --------- | ------------------------------ |
@@ -269,10 +281,9 @@ The application exposes three Kubernetes-style probes under `presentation/rest/h
 | `GET /health/ready`   | Readiness | App is ready to serve traffic. |
 | `GET /health/startup` | Startup   | App has finished starting up.  |
 
-Each probe calls `HealthCheckService.check([indicatorArray])` from
-`@nestjs/terminus`. The arrays are intentionally empty today — new indicators
-(disk usage, memory heap, DB ping, external HTTP) are added directly inside
-the relevant probe method's array, with no controller-shape change.
+Each probe calls `HealthCheckService.check([])` from `@nestjs/terminus`.
+The indicator arrays are empty today. Add readiness checks when required
+external dependencies are introduced.
 
 OpenAPI documentation for all routes (including these) is served at
 `GET /api-docs` (Swagger UI) and `GET /api-docs-json` (raw spec). The setup
@@ -299,12 +310,13 @@ must fail. Then fix.
 - Dependency version bumps with no API surface change.
 - Type-only changes that the type-checker already proves.
 - Composition-root wiring in `main.ts` and `app.module.ts` (covered by the
-  e2e suite, not unit tests).
+  separately maintained e2e suite, not unit tests).
 
 ### Test placement
 
 - **Unit tests** live next to the code they test, named `<file>.spec.ts`.
-- **E2E tests** live in `test/`.
+- **E2E tests** are maintained in a separate repository. Local legacy files in
+  `test/` remain only until a separately scoped cleanup.
 - Tests for `domain/**` and `application/**` must be **pure**: no
   `Test.createTestingModule`, no DB, no HTTP, no Nest DI container. This is
   the direct payoff of the layer-dependency rule.
@@ -313,9 +325,9 @@ must fail. Then fix.
 
 Global threshold of **90%** for `lines`, `statements`, `functions`, and
 `branches`, enforced by Jest's `coverageThreshold`. Runs only when coverage
-is collected — i.e., via `bun run test:cov`. Default `bun test` stays
-uninstrumented so the local TDD loop is fast. CI is expected to invoke
-`bun run test:cov`. The `bun run check` composite includes it.
+is collected — i.e., via `bun run test:cov`. Default `bun run test` stays
+uninstrumented so the local TDD loop is fast. The `bun run check` composite
+includes coverage; CI is not configured by this change.
 
 Path-ignored from coverage:
 
