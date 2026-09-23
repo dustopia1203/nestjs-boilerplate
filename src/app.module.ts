@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { LoggerModule, type Params } from 'nestjs-pino';
 
-import { appConfig, type AppConfig } from '@application/config/app.config';
+import { appConfig, type AppConfig } from '@infrastructure/config/app.config';
 import { HealthModule } from '@presentation/rest/api/health/health.module';
 import { GlobalExceptionFilter } from '@presentation/rest/filters/global-exception.filter';
 

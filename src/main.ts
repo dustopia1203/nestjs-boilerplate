@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 
-import { appConfig, type AppConfig } from '@application/config/app.config';
+import { appConfig, type AppConfig } from '@infrastructure/config/app.config';
 
 import { AppModule } from './app.module';
 

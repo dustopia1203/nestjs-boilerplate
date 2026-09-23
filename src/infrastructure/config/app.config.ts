@@ -1,7 +1,7 @@
 import { registerAs, type ConfigType } from '@nestjs/config';
 import { z } from 'zod';
 
-import { LOG_LEVELS, type LogLevel } from '../enum/log-level.enum';
+import { LOG_LEVELS, type LogLevel } from './log-level';
 
 const DEFAULT_PORT = 3000;
 

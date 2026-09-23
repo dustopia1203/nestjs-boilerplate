@@ -34,6 +34,19 @@ describe('parseAppConfig', () => {
     expect(result.nodeEnv).toBe('development');
   });
 
+  it.each(['abc', '0', '-1', '1.5'])('rejects invalid PORT=%s', (PORT) => {
+    expect(() => parseAppConfig({ PORT })).toThrow();
+  });
+
+  it('preserves default runtime config', () => {
+    expect(parseAppConfig({})).toEqual({
+      port: 3000,
+      nodeEnv: 'development',
+      logLevel: 'debug',
+      prettyPrint: true,
+    });
+  });
+
   it('resolves logLevel from NODE_ENV default when LOG_LEVEL is absent', () => {
     expect(parseAppConfig({ NODE_ENV: 'development' }).logLevel).toBe('debug');
     expect(parseAppConfig({ NODE_ENV: 'production' }).logLevel).toBe('info');
@@ -66,11 +79,18 @@ describe('parseAppConfig', () => {
 });
 
 describe('appConfig (registerAs factory)', () => {
-  it('invokes parseAppConfig with process.env and returns a typed config', () => {
-    const result = appConfig();
-
-    expect(result).toHaveProperty('port');
-    expect(result).toHaveProperty('nodeEnv');
-    expect(result).toHaveProperty('logLevel');
+  it('registers the config group using the current environment', () => {
+    const previousEnv = process.env;
+    process.env = { PORT: '4010', NODE_ENV: 'production', LOG_LEVEL: 'warn' };
+    try {
+      expect(appConfig()).toEqual({
+        port: 4010,
+        nodeEnv: 'production',
+        logLevel: 'warn',
+        prettyPrint: false,
+      });
+    } finally {
+      process.env = previousEnv;
+    }
   });
 });
