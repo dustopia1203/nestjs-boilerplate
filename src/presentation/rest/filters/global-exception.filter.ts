@@ -5,11 +5,12 @@ import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ZodError } from 'zod';
 
-import type { ErrorResponseDto } from '@application/dto/error-response.dto';
 import { CommonError } from '@application/error/common.error';
 import { ResponseErrorDef } from '@application/error/response-error';
 import type { ResponseError } from '@application/error/response-error.interface';
 import { ResponseException } from '@application/error/response.exception';
+
+import type { ErrorResponseDto } from '../dto/error-response.dto';
 
 /** Internal resolution result produced by `classify()`. */
 interface Classification {
@@ -75,7 +76,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     res.status(error.status).json({
       error: { code: error.code, name: error.name, message: error.message },
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       path: req.url,
       traceId,
     } satisfies ErrorResponseDto);

@@ -25,8 +25,8 @@ export class ErrorResponseDto {
   @ApiProperty({ type: ErrorBodyDto })
   public error!: ErrorBodyDto;
 
-  /** Unix epoch seconds of when the error was handled. */
-  @ApiProperty({ example: 1_747_141_920 })
+  /** Unix epoch milliseconds of when the error was handled. */
+  @ApiProperty({ example: 1_747_141_920_000 })
   public timestamp!: number;
 
   /** Request path that triggered the error. */

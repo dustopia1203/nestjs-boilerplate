@@ -21,12 +21,12 @@ describe('ErrorResponseDto', () => {
 
     const dto = new ErrorResponseDto();
     dto.error = body;
-    dto.timestamp = 1_747_141_920;
+    dto.timestamp = 1_747_141_920_000;
     dto.path = '/health/live';
     dto.traceId = 'abc-123';
 
     expect(dto.error).toBe(body);
-    expect(dto.timestamp).toBe(1_747_141_920);
+    expect(dto.timestamp).toBe(1_747_141_920_000);
     expect(dto.path).toBe('/health/live');
     expect(dto.traceId).toBe('abc-123');
   });

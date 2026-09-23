@@ -13,7 +13,7 @@ import { GlobalExceptionFilter } from './global-exception.filter';
 interface ResponseBody {
   /** Structured error details. */
   error: { code: number; name: string; message: string };
-  /** Unix epoch seconds. */
+  /** Unix epoch milliseconds. */
   timestamp: number;
   /** Request path. */
   path: string;
@@ -42,6 +42,8 @@ function makeHost(reqOverrides: Record<string, unknown> = {}): {
 }
 
 describe('GlobalExceptionFilter', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   describe('ResponseException classification', () => {
     it('uses the catalog entry status and code', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
@@ -222,6 +224,17 @@ describe('GlobalExceptionFilter', () => {
   });
 
   describe('response body shape', () => {
+    it('writes the current epoch in milliseconds', () => {
+      const now = 1_747_141_920_123;
+      jest.spyOn(Date, 'now').mockReturnValue(now);
+      const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
+      const { host, jsonFn } = makeHost({ id: 'trace-ms' });
+
+      filter.catch(new Error('failure'), host);
+
+      expect(jsonFn).toHaveBeenCalledWith(expect.objectContaining({ timestamp: now }));
+    });
+
     it('always includes error, timestamp, path, and traceId', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
       const { host, jsonFn } = makeHost({ id: 'trace-x' });
