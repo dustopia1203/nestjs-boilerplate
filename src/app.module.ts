@@ -4,9 +4,9 @@ import { APP_FILTER } from '@nestjs/core';
 import { LoggerModule, type Params } from 'nestjs-pino';
 
 import { appConfig, type AppConfig } from '@infrastructure/config/app.config';
-import { generateRequestId } from '@infrastructure/logging/request-id';
 import { HealthModule } from '@presentation/rest/api/health/health.module';
 import { GlobalExceptionFilter } from '@presentation/rest/filters/global-exception.filter';
+import { generateRequestId } from '@presentation/rest/request-id';
 
 /**
  * Builds pino-http options from the validated app config.

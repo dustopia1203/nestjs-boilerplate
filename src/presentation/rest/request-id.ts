@@ -2,6 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { v7 as uuidv7 } from 'uuid';
 
+/** HTTP header that exposes the server-generated request identifier. */
+export const REQUEST_ID_HEADER = 'X-Request-Id';
+
 /**
  * Generates a UUID v7 request ID for an HTTP request.
  *
@@ -11,6 +14,6 @@ import { v7 as uuidv7 } from 'uuid';
  */
 export function generateRequestId(_request: IncomingMessage, response: ServerResponse): string {
   const requestId = uuidv7();
-  response.setHeader('X-Request-Id', requestId);
+  response.setHeader(REQUEST_ID_HEADER, requestId);
   return requestId;
 }

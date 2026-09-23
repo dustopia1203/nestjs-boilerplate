@@ -9,6 +9,7 @@ import { CommonError } from '@application/error/common.error';
 
 import type { ErrorResponseDto } from '../dto/error-response.dto';
 import { mapApplicationError, type HttpError } from '../error/http-error-mapping';
+import { REQUEST_ID_HEADER } from '../request-id';
 
 const HTTP_ERROR_CODE_MULTIPLIER = 1_000_000;
 
@@ -65,7 +66,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // unit-test mocks that omit the field
     const requestId =
       typeof req.id === 'string' || typeof req.id === 'number' ? String(req.id) : uuidv7();
-    res.setHeader('X-Request-Id', requestId);
+    res.setHeader(REQUEST_ID_HEADER, requestId);
 
     this.log(error, {
       requestId,

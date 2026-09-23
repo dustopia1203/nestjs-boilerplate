@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, rmdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test, { after, before } from 'node:test';
 
 import { ESLint } from 'eslint';
@@ -139,38 +141,65 @@ for (const filePath of [
   });
 }
 
+/* eslint-disable security/detect-non-literal-fs-filename -- Test fixtures use paths created in this file. */
 // no-restricted-paths skips imports it cannot resolve, so the composition
 // target must exist on disk while these fixtures run.
 const compositionDir = 'src/composition';
-const compositionFixture = `${compositionDir}/boundary-fixture.module.ts`;
+const compositionFixtureName = `boundary-fixture-${process.pid}.module`;
+const compositionFixture = `${compositionDir}/${compositionFixtureName}.ts`;
 const compositionDirExisted = existsSync(compositionDir);
+async function cleanupFixture(fixture, directory, directoryExisted) {
+  await rm(fixture, { force: true });
+  if (directoryExisted) return;
+  try {
+    await rmdir(directory);
+  } catch (error) {
+    if (error?.code !== 'ENOTEMPTY' && error?.code !== 'ENOENT' && error?.code !== 'EEXIST') {
+      throw error;
+    }
+  }
+}
+test('fixture cleanup preserves another run fixture and removes the directory when empty', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'boundary-fixtures-'));
+  const firstFixture = path.join(directory, 'first.module.ts');
+  const secondFixture = path.join(directory, 'second.module.ts');
+  try {
+    await writeFile(firstFixture, 'export const first = 1;\n');
+    await writeFile(secondFixture, 'export const second = 2;\n');
+
+    await cleanupFixture(firstFixture, directory, false);
+    assert.equal(existsSync(secondFixture), true);
+
+    await cleanupFixture(secondFixture, directory, false);
+    assert.equal(existsSync(directory), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 before(async () => {
   await mkdir(compositionDir, { recursive: true });
   await writeFile(compositionFixture, 'export const fixture = 1;\n');
 });
 after(async () => {
-  await rm(compositionDirExisted ? compositionFixture : compositionDir, {
-    recursive: true,
-    force: true,
-  });
+  await cleanupFixture(compositionFixture, compositionDir, compositionDirExisted);
 });
 
 for (const [filePath, source] of [
   [
     'src/domain/boundary-fixture.ts',
-    "import { fixture } from '../composition/boundary-fixture.module';",
+    `import { fixture } from '../composition/${compositionFixtureName}';`,
   ],
   [
     'src/application/boundary-fixture.ts',
-    "import { fixture } from '../composition/boundary-fixture.module';",
+    `import { fixture } from '../composition/${compositionFixtureName}';`,
   ],
   [
     'src/infrastructure/boundary-fixture.ts',
-    "import { fixture } from '../composition/boundary-fixture.module';",
+    `import { fixture } from '../composition/${compositionFixtureName}';`,
   ],
   [
     'src/presentation/rest/boundary-fixture.ts',
-    "import { fixture } from '../../composition/boundary-fixture.module';",
+    `import { fixture } from '../../composition/${compositionFixtureName}';`,
   ],
 ]) {
   test(`${filePath} rejects composition import`, async () => {
@@ -189,3 +218,4 @@ for (const source of [
     assert.deepEqual(await lintBoundary(source, compositionFixture), []);
   });
 }
+/* eslint-enable security/detect-non-literal-fs-filename -- Restore path checks outside test fixtures. */
