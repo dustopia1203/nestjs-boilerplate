@@ -3,9 +3,9 @@ import type { ArgumentsHost } from '@nestjs/common';
 import type { PinoLogger } from 'nestjs-pino';
 import { z } from 'zod';
 
+import { ApplicationErrorDef } from '@application/error/application-error';
+import { ApplicationException } from '@application/error/application.exception';
 import { AuthenticationError } from '@application/error/authentication.error';
-import { ResponseErrorDef } from '@application/error/response-error';
-import { ResponseException } from '@application/error/response.exception';
 
 import { GlobalExceptionFilter } from './global-exception.filter';
 
@@ -44,12 +44,38 @@ function makeHost(reqOverrides: Record<string, unknown> = {}): {
 describe('GlobalExceptionFilter', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  describe('ResponseException classification', () => {
-    it('uses the catalog entry status and code', () => {
+  describe('ApplicationException classification', () => {
+    it('hides unmapped application details and retains the exception in logs', () => {
+      const logger = makeLogger();
+      const filter = new GlobalExceptionFilter(logger as unknown as PinoLogger);
+      const { host, statusFn, jsonFn } = makeHost();
+      const exception = new ApplicationException(
+        new ApplicationErrorDef('future.unmapped', 'diagnostic-only detail'),
+        { operation: 'lookup' },
+      );
+
+      filter.catch(exception, host);
+
+      expect(statusFn).toHaveBeenCalledWith(500);
+      expect(jsonFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: { code: 500_000_001, name: 'UNKNOWN', message: 'Internal server error' },
+        }),
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: exception, context: { operation: 'lookup' } }),
+        'Internal server error',
+      );
+    });
+
+    it('uses the mapped status and code', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
       const { host, statusFn, jsonFn } = makeHost({ id: 'trace-1' });
 
-      filter.catch(new ResponseException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }), host);
+      filter.catch(
+        new ApplicationException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }),
+        host,
+      );
 
       expect(statusFn).toHaveBeenCalledWith(401);
       const body = jsonFn.mock.calls[0]?.[0] as ResponseBody;
@@ -62,7 +88,10 @@ describe('GlobalExceptionFilter', () => {
       const filter = new GlobalExceptionFilter(makeLogger() as unknown as PinoLogger);
       const { host, jsonFn } = makeHost();
 
-      filter.catch(new ResponseException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }), host);
+      filter.catch(
+        new ApplicationException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }),
+        host,
+      );
 
       expect(jsonFn.mock.calls[0]?.[0] as Record<string, unknown>).not.toHaveProperty('context');
     });
@@ -72,7 +101,10 @@ describe('GlobalExceptionFilter', () => {
       const filter = new GlobalExceptionFilter(logger as unknown as PinoLogger);
       const { host } = makeHost();
 
-      filter.catch(new ResponseException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }), host);
+      filter.catch(
+        new ApplicationException(AuthenticationError.UNAUTHORISED, { userId: 'u1' }),
+        host,
+      );
 
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({ context: { userId: 'u1' } }),
@@ -202,7 +234,7 @@ describe('GlobalExceptionFilter', () => {
       const filter = new GlobalExceptionFilter(logger as unknown as PinoLogger);
       const { host } = makeHost();
 
-      filter.catch(new ResponseException(AuthenticationError.UNAUTHORISED), host);
+      filter.catch(new ApplicationException(AuthenticationError.UNAUTHORISED), host);
 
       expect(logger.warn).toHaveBeenCalled();
       expect(logger.error).not.toHaveBeenCalled();
@@ -212,10 +244,7 @@ describe('GlobalExceptionFilter', () => {
       const logger = makeLogger();
       const filter = new GlobalExceptionFilter(logger as unknown as PinoLogger);
       const { host } = makeHost();
-      // Synthetic entry: code 200_000_001 → Math.floor(200_000_001 / 1_000_000) = 200
-      const infoEntry = new ResponseErrorDef(200_000_001, 'OK', 'ok');
-
-      filter.catch(new ResponseException(infoEntry), host);
+      filter.catch(new HttpException('ok', HttpStatus.OK), host);
 
       expect(logger.info).toHaveBeenCalled();
       expect(logger.warn).not.toHaveBeenCalled();

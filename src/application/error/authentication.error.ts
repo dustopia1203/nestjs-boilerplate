@@ -1,10 +1,10 @@
-import { ResponseErrorDef } from './response-error';
-import type { ResponseError } from './response-error.interface';
+import { ApplicationErrorDef } from './application-error';
+import type { ApplicationError } from './application-error.interface';
 
 /**
- * Error catalog for authentication failures (HTTP 401).
+ * Error catalog for authentication failures.
  */
 export const AuthenticationError = {
-  UNKNOWN: new ResponseErrorDef(401_000_001, 'UNKNOWN', 'Unknown authentication error'),
-  UNAUTHORISED: new ResponseErrorDef(401_000_002, 'UNAUTHORISED', 'User is not authenticated'),
-} as const satisfies Record<string, ResponseError>;
+  UNKNOWN: new ApplicationErrorDef('authentication.unknown', 'Unknown authentication error'),
+  UNAUTHORISED: new ApplicationErrorDef('authentication.unauthorised', 'User is not authenticated'),
+} as const satisfies Record<string, ApplicationError>;

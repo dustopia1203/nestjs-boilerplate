@@ -5,17 +5,18 @@ import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ZodError } from 'zod';
 
+import { ApplicationException } from '@application/error/application.exception';
 import { CommonError } from '@application/error/common.error';
-import { ResponseErrorDef } from '@application/error/response-error';
-import type { ResponseError } from '@application/error/response-error.interface';
-import { ResponseException } from '@application/error/response.exception';
 
 import type { ErrorResponseDto } from '../dto/error-response.dto';
+import { mapApplicationError, type HttpError } from '../error/http-error-mapping';
+
+const HTTP_ERROR_CODE_MULTIPLIER = 1_000_000;
 
 /** Internal resolution result produced by `classify()`. */
 interface Classification {
-  /** Resolved error catalog entry. */
-  error: ResponseError;
+  /** Resolved public HTTP error. */
+  error: HttpError;
   /** Original thrown value preserved for log chaining. */
   cause?: unknown;
   /** Log-only key-value metadata; never included in the response body. */
@@ -83,23 +84,23 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Maps the thrown value to a ResponseError and optional diagnostic data.
+   * Maps the thrown value to a public HTTP error and optional diagnostic data.
    *
    * @param exception - The thrown value.
    * @returns Classification with the resolved error, optional cause, and optional log context.
    */
   private classify(exception: unknown): Classification {
-    if (exception instanceof ResponseException) {
+    if (exception instanceof ApplicationException) {
       return {
-        error: exception.error,
-        cause: exception.cause,
+        error: mapApplicationError(exception.error),
+        cause: exception,
         // exactOptionalPropertyTypes: only spread when defined to avoid explicit `undefined`
         ...(exception.context !== undefined && { context: exception.context }),
       };
     }
     if (exception instanceof ZodError) {
       return {
-        error: CommonError.VALIDATION,
+        error: mapApplicationError(CommonError.VALIDATION),
         cause: exception,
         context: { issues: exception.issues },
       };
@@ -107,30 +108,30 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return { error: this.mapHttpException(exception), cause: exception };
     }
-    return { error: CommonError.UNKNOWN, cause: exception };
+    return { error: mapApplicationError(CommonError.UNKNOWN), cause: exception };
   }
 
   /**
-   * Synthesises a ResponseError from a NestJS HttpException.
+   * Synthesises a public HTTP error from a NestJS HttpException.
    *
    * @param exc - The HttpException to convert.
-   * @returns A ResponseErrorDef preserving the original status with a name derived from the class name.
+   * @returns HTTP error preserving the original status with a name derived from the class name.
    */
-  private mapHttpException(exc: HttpException): ResponseError {
+  private mapHttpException(exc: HttpException): HttpError {
     const status = exc.getStatus();
     // BadRequestException → BadRequest → BAD_REQUEST; HttpException → HTTP
     const rawName = exc.constructor.name.replace(/Exception$/, '');
     const name = rawName.replaceAll(/(?<=[a-z])([A-Z])/g, '_$1').toUpperCase();
-    return new ResponseErrorDef(status * 1_000_000, name, exc.message);
+    return { status, code: status * HTTP_ERROR_CODE_MULTIPLIER, name, message: exc.message };
   }
 
   /**
    * Writes a structured log entry at the level appropriate for the error status range.
    *
-   * @param error - The resolved ResponseError.
+   * @param error - The resolved public HTTP error.
    * @param meta - Request-scoped metadata to include in the log payload.
    */
-  private log(error: ResponseError, meta: LogMeta): void {
+  private log(error: HttpError, meta: LogMeta): void {
     const payload = {
       err: meta.cause,
       errorCode: error.code,

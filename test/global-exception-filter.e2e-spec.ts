@@ -6,17 +6,17 @@ import { LoggerModule } from 'nestjs-pino';
 import request from 'supertest';
 import { z } from 'zod';
 
+import { ApplicationException } from '../src/application/error/application.exception';
 import { AuthenticationError } from '../src/application/error/authentication.error';
-import { ResponseException } from '../src/application/error/response.exception';
 import { GlobalExceptionFilter } from '../src/presentation/rest/filters/global-exception.filter';
 
 /** Minimal controller that throws each of the four classified exception types. */
 @Controller('test-errors')
 class TestErrorController {
-  /** Throws a ResponseException with a catalog entry. */
+  /** Throws an ApplicationException with a catalog entry. */
   @Get('response-exception')
-  public throwResponseException(): never {
-    throw new ResponseException(AuthenticationError.UNAUTHORISED, { userId: 'u1' });
+  public throwApplicationException(): never {
+    throw new ApplicationException(AuthenticationError.UNAUTHORISED, { userId: 'u1' });
   }
 
   /** Throws a NestJS HttpException subclass. */
@@ -68,7 +68,7 @@ describe('GlobalExceptionFilter (e2e)', () => {
     return request(app.getHttpServer()).get('/test-errors/ok').expect(200).expect({ status: 'ok' });
   });
 
-  it('ResponseException → 401 with nested error envelope', () => {
+  it('ApplicationException → 401 with nested error envelope', () => {
     return request(app.getHttpServer())
       .get('/test-errors/response-exception')
       .expect(401)

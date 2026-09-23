@@ -1,10 +1,10 @@
-import { ResponseErrorDef } from './response-error';
-import type { ResponseError } from './response-error.interface';
+import { ApplicationErrorDef } from './application-error';
+import type { ApplicationError } from './application-error.interface';
 
 /**
- * Cross-cutting error catalog for generic failure cases (UNKNOWN 500, VALIDATION_FAILED 400).
+ * Cross-cutting catalog of generic application failures.
  */
 export const CommonError = {
-  UNKNOWN: new ResponseErrorDef(500_000_001, 'UNKNOWN', 'Internal server error'),
-  VALIDATION: new ResponseErrorDef(400_000_001, 'VALIDATION_FAILED', 'Request validation failed'),
-} as const satisfies Record<string, ResponseError>;
+  UNKNOWN: new ApplicationErrorDef('common.unknown', 'Unexpected application failure'),
+  VALIDATION: new ApplicationErrorDef('common.validation_failed', 'Input validation failed'),
+} as const satisfies Record<string, ApplicationError>;
