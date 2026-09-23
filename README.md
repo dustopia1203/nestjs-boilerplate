@@ -27,7 +27,7 @@ bun install            # installs deps and (after git init) activates Husky hook
 bun run start:dev      # boots Nest on http://localhost:3000
 bun run test                 # Jest unit tests
 bun run test:cov             # Unit coverage with the existing 90% thresholds
-node --test scripts/architecture-boundaries.test.mjs
+bun run test:architecture    # ESLint layer-boundary fixture tests
 bun run check                # Existing local checks; excludes e2e
 curl http://localhost:3000/health/live
 ```
@@ -113,8 +113,9 @@ e2e is managed in a separate repository.
 | pre-commit | `bun audit --prod --audit-level=high` | dep CVEs (only when `package.json` is staged)                      |
 | commit-msg | commitlint                            | Conventional Commits                                               |
 
-The local `bun run check` command runs typecheck, lint, source/test TypeScript
-format checks, audit, secrets scan, and `bun run test:cov`. It excludes e2e.
+The local `bun run check` command runs typecheck, lint, architecture-boundary
+tests, source/test TypeScript format checks, audit, secrets scan, and
+`bun run test:cov`. It excludes e2e.
 The 90% coverage thresholds are documented in `AGENTS.md`.
 
 ## Adding a function
@@ -138,18 +139,19 @@ Test files (`*.spec.ts`, `*.e2e-spec.ts`) are exempt.
 
 ## Scripts
 
-| Command                | Description                                                      |
-| ---------------------- | ---------------------------------------------------------------- |
-| `bun run start:dev`    | Run Nest in watch mode                                           |
-| `bun run build`        | Compile to `dist/`                                               |
-| `bun run start:prod`   | Run the compiled app                                             |
-| `bun run test`         | Unit tests (Jest)                                                |
-| `bun run test:e2e`     | Legacy local e2e command; the separate repository owns e2e tests |
-| `bun run test:cov`     | Unit tests + 90% coverage floor                                  |
-| `bun run lint`         | Lint with `--max-warnings=0`                                     |
-| `bun run lint:fix`     | Lint + autofix                                                   |
-| `bun run format`       | Format with Prettier                                             |
-| `bun run typecheck`    | `tsc --noEmit`                                                   |
-| `bun run audit`        | `bun audit --prod --audit-level=high`                            |
-| `bun run secrets:scan` | Full-tree secretlint scan                                        |
-| `bun run check`        | Existing local checks; excludes e2e                              |
+| Command                     | Description                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| `bun run start:dev`         | Run Nest in watch mode                                           |
+| `bun run build`             | Compile to `dist/`                                               |
+| `bun run start:prod`        | Run the compiled app                                             |
+| `bun run test`              | Unit tests (Jest)                                                |
+| `bun run test:e2e`          | Legacy local e2e command; the separate repository owns e2e tests |
+| `bun run test:cov`          | Unit tests + 90% coverage floor                                  |
+| `bun run test:architecture` | ESLint layer-boundary fixture tests                              |
+| `bun run lint`              | Lint with `--max-warnings=0`                                     |
+| `bun run lint:fix`          | Lint + autofix                                                   |
+| `bun run format`            | Format with Prettier                                             |
+| `bun run typecheck`         | `tsc --noEmit`                                                   |
+| `bun run audit`             | `bun audit --prod --audit-level=high`                            |
+| `bun run secrets:scan`      | Full-tree secretlint scan                                        |
+| `bun run check`             | Existing local checks; excludes e2e                              |

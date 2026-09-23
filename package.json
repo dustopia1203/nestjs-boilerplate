@@ -17,9 +17,10 @@
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:cov": "jest --coverage",
+    "test:architecture": "node --test scripts/architecture-boundaries.test.mjs",
     "audit": "bun audit --prod --audit-level=high",
     "secrets:scan": "secretlint --secretlintignore .gitignore \"**/*\"",
-    "check": "bun run typecheck && bun run lint && bun run format:check && bun run audit && bun run secrets:scan && bun run test:cov",
+    "check": "bun run typecheck && bun run lint && bun run test:architecture && bun run format:check && bun run audit && bun run secrets:scan && bun run test:cov",
     "prepare": "husky"
   },
   "lint-staged": {
