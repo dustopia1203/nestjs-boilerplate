@@ -115,9 +115,14 @@ export default tseslint.config(
           zones: [
             {
               target: './src/domain',
-              from: ['./src/application', './src/infrastructure', './src/presentation'],
+              from: [
+                './src/application',
+                './src/infrastructure',
+                './src/presentation',
+                './src/composition',
+              ],
               message:
-                'domain/** must not depend on outer layers (application, infrastructure, presentation).',
+                'domain/** must not depend on outer layers (application, infrastructure, presentation, composition).',
             },
             {
               target: './src/domain',
@@ -127,19 +132,20 @@ export default tseslint.config(
             },
             {
               target: './src/application',
-              from: ['./src/infrastructure', './src/presentation'],
-              message: 'application/** must not depend on infrastructure/** or presentation/**.',
+              from: ['./src/infrastructure', './src/presentation', './src/composition'],
+              message:
+                'application/** must not depend on infrastructure/**, presentation/**, or composition/**.',
             },
             {
               target: './src/infrastructure',
-              from: './src/presentation',
-              message: 'infrastructure/** must not depend on presentation/**.',
+              from: ['./src/presentation', './src/composition'],
+              message: 'infrastructure/** must not depend on presentation/** or composition/**.',
             },
             {
               target: './src/presentation',
-              from: ['./src/domain', './src/infrastructure'],
+              from: ['./src/domain', './src/infrastructure', './src/composition'],
               message:
-                'presentation/** must depend only on application/** (not domain/** or infrastructure/**).',
+                'presentation/** must depend only on application/** (not domain/**, infrastructure/**, or composition/**).',
             },
           ],
         },
@@ -208,7 +214,8 @@ export default tseslint.config(
     },
   },
 
-  // Override: composition root — exempt from layer dependency rule
+  // Override: composition root — exempt from layer dependency rule. src/composition/**
+  // needs no override: it is no zone's target, and every layer is barred from importing it.
   {
     files: ['src/main.ts', 'src/app.module.ts'],
     rules: {
@@ -259,8 +266,8 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts'],
     ignores: [
-      'src/infrastructure/config/app.config.ts',
-      'src/infrastructure/config/app.config.spec.ts',
+      'src/infrastructure/config/*.config.ts',
+      'src/infrastructure/config/*.config.spec.ts',
     ],
     rules: {
       'no-restricted-properties': [
@@ -268,7 +275,7 @@ export default tseslint.config(
         {
           object: 'process',
           property: 'env',
-          message: 'Read environment variables only in infrastructure/config/app.config.ts.',
+          message: 'Read environment variables only in infrastructure/config/*.config.ts.',
         },
       ],
     },

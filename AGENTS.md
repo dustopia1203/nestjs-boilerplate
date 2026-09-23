@@ -156,16 +156,17 @@ contain a complete DDD domain model.
 | `application/`    | Plain use-cases, application services, semantic errors, and use-case input/output shapes.                             |
 | `infrastructure/` | Adapters and raw environment parsing, defaults, and coercion.                                                         |
 | `presentation/`   | Transport layer sliced by protocol (`rest/`, `graphql/`, `ws/`, …). Controllers, HTTP DTOs, and public error mapping. |
+| `composition/`    | Per-context Nest modules that wire controllers, adapters, config, and application services. Wiring only.              |
 
 ### Dependency rule
 
-| Layer                                         | May import from                   | Must NOT import from                                                  |
-| --------------------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
-| `domain/**`                                   | other `domain/**`, node built-ins | `application/**`, `infrastructure/**`, `presentation/**`, `@nestjs/*` |
-| `application/**`                              | `domain/**`                       | `infrastructure/**`, `presentation/**`                                |
-| `infrastructure/**`                           | `application/**`, `domain/**`     | `presentation/**`                                                     |
-| `presentation/**`                             | `application/**`                  | `domain/**`, `infrastructure/**`                                      |
-| `app.module.ts`, `main.ts` (composition root) | anything                          | — (exempt)                                                            |
+| Layer                                                           | May import from                   | Must NOT import from                                                                    |
+| --------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------- |
+| `domain/**`                                                     | other `domain/**`, node built-ins | `application/**`, `infrastructure/**`, `presentation/**`, `composition/**`, `@nestjs/*` |
+| `application/**`                                                | `domain/**`                       | `infrastructure/**`, `presentation/**`, `composition/**`                                |
+| `infrastructure/**`                                             | `application/**`, `domain/**`     | `presentation/**`, `composition/**`                                                     |
+| `presentation/**`                                               | `application/**`                  | `domain/**`, `infrastructure/**`, `composition/**`                                      |
+| `app.module.ts`, `main.ts`, `composition/**` (composition root) | anything                          | — (exempt)                                                                              |
 
 Domain and application code must not import `@nestjs/*`, `nestjs-pino`,
 `pino-http`, `express`, or `zod`, including package subpaths and type-only
@@ -201,6 +202,14 @@ sub-folder `application/<context>/` once real contexts are introduced):
 | `dto/`     | Plain use-case input/output shapes.                    |
 | `mapper/`  | Transform domain objects to/from use-case DTOs.        |
 
+Two files sit at the root of `application/<context>/`:
+
+- `<context>-policy.ts` — plain interface `<Context>Policy` describing the
+  context's business settings (limits, quotas, TTLs) in domain language.
+  Infrastructure supplies the values; see "Env single source of truth".
+- `<context>.repository.ts` — persistence port interface plus its DI token,
+  `export const <CONTEXT>_REPOSITORY = Symbol('<Context>Repository')`.
+
 HTTP response envelopes, Swagger-decorated DTOs, and Swagger schema helpers
 belong in `presentation/rest/dto/`. Application errors expose a semantic key
 and diagnostic message. REST maps those keys to public codes, HTTP statuses,
@@ -209,31 +218,60 @@ and client-facing messages.
 ### Env single source of truth
 
 All raw environment parsing, defaults, and type coercion are declared only in
-`src/infrastructure/config/app.config.ts`. Other production source files must
-consume validated values instead of reading `process.env`. Its colocated config
-test may temporarily control `process.env` and must restore it.
+`src/infrastructure/config/*.config.ts`. Other production source files must
+consume validated values instead of reading `process.env`. Colocated config
+tests may temporarily control `process.env` and must restore them.
 
-New env vars go into `appConfigSchema` first; other config consumers receive
-validated `AppConfig` values.
+Two kinds of settings live there:
+
+| Kind                                                 | File                                    | Shape owned by                                    |
+| ---------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| Technical (`PORT`, `NODE_ENV`, `LOG_LEVEL`, DB URLs) | `app.config.ts` → `appConfigSchema`     | infrastructure (`AppConfig`)                      |
+| Business policy (limits, quotas, TTLs, flags)        | `<context>.config.ts`, one `registerAs` | application (`<Context>Policy` in `application/`) |
+
+A `<context>.config.ts` parse function returns the application's
+`<Context>Policy` type, so a change to the policy shape fails to compile until
+infrastructure follows. Cross-field checks (e.g. default page size ≤ max page
+size) belong in its zod schema so bad values fail at startup.
+
+A rule that never varies between deployments (e.g. a maximum name length) is
+not configuration: keep it as a named constant in `domain/`.
 
 ### CQRS convention
 
-Use-cases are plain classes, **one file per use-case**, placed directly inside
-`application/` (or `application/<context>/` once bounded contexts are introduced):
+By default each bounded context exposes its use-cases through two application
+services in `application/<context>/service/`:
 
-- `<action>.command.ts` — state-changing operation. Handler in the same file
-  or a sibling `<action>.command-handler.ts`.
-- `<action>.query.ts` — read-only operation.
+- `<context>-command.service.ts` — `<Context>CommandService`, one method per
+  state-changing use-case (`create`, `update`, `delete`, …).
+- `<context>-query.service.ts` — `<Context>QueryService`, one method per
+  read-only use-case (`get`, `list`, …).
 
 Rules:
 
-- Handlers are plain classes. Composition-root providers supply Nest wiring
-  when dependencies require it.
+- Services are plain classes without `@Injectable()`. The context's
+  composition module builds them with `useFactory` (see "Composition root").
+- A constructor takes only what its service's methods use. Narrow shared
+  policies with `Pick<<Context>Policy, …>` so writes never receive read limits
+  and vice versa.
+- Use-case inputs and outputs are plain types in `application/<context>/dto/`.
 - No bus library. No `@nestjs/cqrs`. No custom CommandBus / QueryBus interface.
 
-If the project later needs sagas, event sourcing, or many handlers benefiting
-from a centralised dispatcher, `@nestjs/cqrs` can be adopted incrementally
-without moving files.
+Extract a use-case into a standalone handler — `application/<context>/<action>.command.ts`
+or `<action>.query.ts`, exporting `<Action>Handler` with an `execute()` method —
+when it meets **any** of these:
+
+- It needs a dependency that no other method in its service uses.
+- Its logic exceeds ~30 lines, or keeping it would push the service file past
+  300 lines.
+- It needs its own transaction boundary, audit trail, or authorization check.
+
+For example, `checkout.command.ts` stands alone rather than living in
+`OrderCommandService`.
+
+If the project later needs sagas, event sourcing, or a centralised dispatcher,
+`@nestjs/cqrs` can be adopted incrementally; extracted handlers map onto its
+handlers directly.
 
 ### Presentation layer sub-folders
 
@@ -250,25 +288,59 @@ Each protocol folder is further divided by bounded context when contexts exist:
 
 ### Where does new code go?
 
-| What                                      | Where                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
-| New REST endpoint                         | `presentation/rest/<context>/`                                                              |
-| New use-case                              | `application/` (or `application/<context>/`) — `<action>.command.ts` or `<action>.query.ts` |
-| New application service                   | `application/service/` (or `application/<context>/service/`)                                |
-| New use-case DTO                          | `application/dto/` (or `application/<context>/dto/`)                                        |
-| New HTTP response envelope or Swagger DTO | `presentation/rest/dto/`                                                                    |
-| New semantic application error            | `application/error/`                                                                        |
-| New public HTTP error mapping             | `presentation/rest/error/`                                                                  |
-| New environment variable                  | `infrastructure/config/app.config.ts`                                                       |
-| New mapper                                | `application/mapper/` (or `application/<context>/mapper/`)                                  |
-| New entity / value object / domain event  | `domain/<context>/`                                                                         |
-| New DB or HTTP-client adapter             | `infrastructure/<context>/`                                                                 |
+| What                                      | Where                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| New REST endpoint                         | `presentation/rest/<context>/`                                                                          |
+| New use-case                              | Method on `<Context>CommandService` / `<Context>QueryService` (standalone handler: see CQRS convention) |
+| New application service                   | `application/<context>/service/` — `<context>-command.service.ts`, `<context>-query.service.ts`         |
+| New use-case DTO                          | `application/dto/` (or `application/<context>/dto/`)                                                    |
+| New business config shape                 | `application/<context>/<context>-policy.ts`                                                             |
+| New repository port                       | `application/<context>/<context>.repository.ts`                                                         |
+| New HTTP response envelope or Swagger DTO | `presentation/rest/dto/`                                                                                |
+| New semantic application error            | `application/error/`                                                                                    |
+| New public HTTP error mapping             | `presentation/rest/error/`                                                                              |
+| New technical environment variable        | `infrastructure/config/app.config.ts`                                                                   |
+| New business environment variable         | `infrastructure/config/<context>.config.ts`                                                             |
+| New mapper                                | `application/mapper/` (or `application/<context>/mapper/`)                                              |
+| New entity / value object / domain event  | `domain/<context>/`                                                                                     |
+| New DB or HTTP-client adapter             | `infrastructure/<context>/`                                                                             |
+| New context wiring                        | `composition/<context>.module.ts`                                                                       |
 
-### Composition root exception
+### Composition root
 
-`src/main.ts` and `src/app.module.ts` may import from any layer. Do not
-bypass `AppModule` to wire feature modules — every feature module is
-imported into `AppModule` (directly or transitively).
+`src/main.ts`, `src/app.module.ts`, and `src/composition/**` may import from
+any layer. No layer may import from `composition/**`, and composition files
+must not read `process.env`; they receive config through `ConfigModule` keys.
+
+Each context that needs infrastructure gets one `src/composition/<context>.module.ts`.
+Presentation modules cannot do this job because they may not import
+infrastructure. The composition module:
+
+- declares the context's controllers;
+- binds repository tokens to infrastructure adapters with `useClass`;
+- builds application services with `useFactory`, injecting config keys and
+  repository tokens;
+- holds wiring only, no behaviour.
+
+```ts
+@Module({
+  controllers: [ProductController],
+  providers: [
+    { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
+    {
+      provide: ProductQueryService,
+      useFactory: (policy: ProductPolicy, repo: ProductRepository): ProductQueryService =>
+        new ProductQueryService(policy, repo),
+      inject: [productConfig.KEY, PRODUCT_REPOSITORY],
+    },
+  ],
+})
+export class ProductModule {}
+```
+
+Modules that need no infrastructure wiring (e.g. `HealthModule`) may stay in
+`presentation/`. Do not bypass `AppModule` to wire feature modules — every
+feature module is imported into `AppModule` (directly or transitively).
 
 ### Health endpoints
 
@@ -309,8 +381,9 @@ must fail. Then fix.
 - Pure formatting, comment, or JSDoc-only changes.
 - Dependency version bumps with no API surface change.
 - Type-only changes that the type-checker already proves.
-- Composition-root wiring in `main.ts` and `app.module.ts` (covered by the
-  separately maintained e2e suite, not unit tests).
+- Composition-root wiring in `main.ts`, `app.module.ts`, and
+  `composition/**` (covered by the separately maintained e2e suite, not unit
+  tests).
 
 ### Test placement
 

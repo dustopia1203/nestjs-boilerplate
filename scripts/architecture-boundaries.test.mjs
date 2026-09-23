@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { existsSync } from 'node:fs';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import test, { after, before } from 'node:test';
 
 import { ESLint } from 'eslint';
 import { importX } from 'eslint-plugin-import-x';
@@ -120,8 +122,70 @@ for (const filePath of [
 for (const filePath of [
   'src/infrastructure/config/app.config.ts',
   'src/infrastructure/config/app.config.spec.ts',
+  'src/infrastructure/config/product.config.ts',
+  'src/infrastructure/config/product.config.spec.ts',
 ]) {
   test(`${filePath} permits the centralized env reader/test`, async () => {
     assert.deepEqual(await lintBoundary("const port = process.env['PORT'];", filePath), []);
+  });
+}
+for (const filePath of [
+  'src/infrastructure/config/log-level.ts',
+  'src/composition/boundary-fixture.module.ts',
+]) {
+  test(`${filePath} rejects direct env access`, async () => {
+    const messages = await lintBoundary("const port = process.env['PORT'];", filePath);
+    assert.ok(messages.some((message) => message.ruleId === 'no-restricted-properties'));
+  });
+}
+
+// no-restricted-paths skips imports it cannot resolve, so the composition
+// target must exist on disk while these fixtures run.
+const compositionDir = 'src/composition';
+const compositionFixture = `${compositionDir}/boundary-fixture.module.ts`;
+const compositionDirExisted = existsSync(compositionDir);
+before(async () => {
+  await mkdir(compositionDir, { recursive: true });
+  await writeFile(compositionFixture, 'export const fixture = 1;\n');
+});
+after(async () => {
+  await rm(compositionDirExisted ? compositionFixture : compositionDir, {
+    recursive: true,
+    force: true,
+  });
+});
+
+for (const [filePath, source] of [
+  [
+    'src/domain/boundary-fixture.ts',
+    "import { fixture } from '../composition/boundary-fixture.module';",
+  ],
+  [
+    'src/application/boundary-fixture.ts',
+    "import { fixture } from '../composition/boundary-fixture.module';",
+  ],
+  [
+    'src/infrastructure/boundary-fixture.ts',
+    "import { fixture } from '../composition/boundary-fixture.module';",
+  ],
+  [
+    'src/presentation/rest/boundary-fixture.ts',
+    "import { fixture } from '../../composition/boundary-fixture.module';",
+  ],
+]) {
+  test(`${filePath} rejects composition import`, async () => {
+    const messages = await lintBoundary(source, filePath);
+    assert.ok(messages.some((message) => message.ruleId === 'import-x/no-restricted-paths'));
+  });
+}
+
+for (const source of [
+  "import { appConfig } from '@infrastructure/config/app.config';",
+  "import { HealthModule } from '@presentation/rest/api/health/health.module';",
+  "import { CommonError } from '@application/error/common.error';",
+  "import { Module } from '@nestjs/common';",
+]) {
+  test(`src/composition permits ${source}`, async () => {
+    assert.deepEqual(await lintBoundary(source, compositionFixture), []);
   });
 }
