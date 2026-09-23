@@ -229,6 +229,63 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: ['src/domain/**/*.ts', 'src/application/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@nestjs/*',
+                'nestjs-pino',
+                'nestjs-pino/**',
+                'pino-http',
+                'pino-http/**',
+                'express',
+                'express/**',
+                'zod',
+                'zod/**',
+              ],
+              message: 'Keep framework and adapter dependencies outside domain/application.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['src/**/*.ts'],
+    ignores: [
+      'src/infrastructure/config/app.config.ts',
+      'src/infrastructure/config/app.config.spec.ts',
+    ],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'env',
+          message: 'Read environment variables only in infrastructure/config/app.config.ts.',
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['scripts/architecture-boundaries.test.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    rules: {
+      'jsdoc/require-jsdoc': 'off',
+      'jsdoc/require-description': 'off',
+      'jsdoc/require-param': 'off',
+      'jsdoc/require-returns': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+    },
+  },
+
   // MUST be last — disables stylistic rules in favor of Prettier
   prettierConfig,
 );
